@@ -1,0 +1,14 @@
+node_modules
+.git
+npm-debug.log
+Dockerfile
+.coverage
+.coverage.*
+.env
+.aws
+*.tmp
+*.log
+*~
+*.tar
+*.eif
+*.pem

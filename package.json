@@ -1,0 +1,27 @@
+{
+  "name": "nwc-phoenixd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "nodemon --exec tsx src/index.ts"
+  },
+  "author": "artur@nostr.band",
+  "license": "MIT",
+  "dependencies": {
+    "@noble/ciphers": "^1.2.1",
+    "@noble/curves": "^1.8.1",
+    "@noble/hashes": "^1.7.1",
+    "bolt11": "^1.4.1",
+    "child_process": "^1.0.2",
+    "nostr-tools": "^2.11.0",
+    "sqlite": "^5.1.1",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.19.3"
+  }
+}
