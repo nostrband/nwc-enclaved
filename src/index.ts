@@ -1,5 +1,6 @@
 
 import { WebSocket } from "ws";
+import { startWalletd } from "./walletd";
 
 // @ts-ignore
 global.WebSocket ??= WebSocket;

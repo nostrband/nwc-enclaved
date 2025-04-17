@@ -8,17 +8,6 @@ export interface Signer {
   nip04Encrypt(pubkey: string, data: string): Promise<string>;
 
   nip04Decrypt(pubkey: string, data: string): Promise<string>;
-
-  // nip44Encrypt(pubkey: string, data: string): Promise<string>;
-
-  // nip44Decrypt(pubkey: string, data: string): Promise<string>;
-}
-
-export interface Nip47Req {
-  clientPubkey: string;
-  id: string;
-  method: string;
-  params: any;
 }
 
 export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
@@ -36,6 +25,17 @@ export type ErrorCode =
   | "PAYMENT_FAILED"
   | "NOT_FOUND";
 
+export type TxType = "incoming" | "outgoing";
+
+// NOTE: do not rename, part of NWC
+export interface Nip47Req {
+  clientPubkey: string;
+  id: string;
+  method: string;
+  params: any;
+}
+
+// NOTE: do not rename, part of NWC
 export interface Nip47Rep {
   result_type: string;
   error: null | {
@@ -45,6 +45,7 @@ export interface Nip47Rep {
   result: null | any;
 }
 
+// NOTE: do not rename, part of NWC
 export interface ListTransactionsReq {
   clientPubkey: string;
   from?: number;
@@ -52,11 +53,12 @@ export interface ListTransactionsReq {
   limit?: number;
   offset?: number;
   unpaid?: boolean;
-  type?: "incoming" | "outgoing";
+  type?: TxType;
 }
 
+// NOTE: do not rename, part of NWC
 export interface Transaction {
-  type: "incoming" | "outgoing";
+  type: TxType;
   description?: string;
   description_hash?: string;
   preimage?: string;
@@ -68,6 +70,7 @@ export interface Transaction {
   settled_at?: number;
 }
 
+// NOTE: do not rename, part of NWC
 export interface MakeInvoiceReq {
   clientPubkey: string;
   amount: number;
@@ -76,6 +79,7 @@ export interface MakeInvoiceReq {
   expiry?: number;
 }
 
+// NOTE: do not rename, part of NWC
 export interface Invoice {
   type: "incoming";
   invoice: string;
@@ -87,13 +91,21 @@ export interface Invoice {
   expires_at: number;
 }
 
+// NOTE: do not rename, part of NWC
 export interface PayInvoiceReq {
   clientPubkey: string;
   invoice: string;
   amount?: number; // msat
 }
 
+// NOTE: do not rename, part of NWC
 export interface PaymentResult {
   preimage: string;
   fees_paid?: number;
+}
+
+export interface WalletState {
+  balance: number;
+  channelSize: number;
+  feeCredit: number;
 }
