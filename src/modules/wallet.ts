@@ -196,7 +196,7 @@ export class Wallet {
     (() => {
       // already locked by other payments
       const lockedAmount = [...this.pendingPayments.values()].reduce(
-        (s, l) => (s += l),
+        (s, l) => s + l,
         0
       );
 
