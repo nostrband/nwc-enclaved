@@ -71,10 +71,16 @@ export class Wallet {
     return { newState, miningFee };
   }
 
-  private prepareStateSettlePayment(invoice: Invoice, fees: number) {
+  private prepareStateSettlePayment(
+    amount: number,
+    totalFee: number,
+    phoenixFee: number
+  ): WalletState {
+    const ourFee = totalFee - phoenixFee;
     return {
-      ...this.state,
-      balance: this.state.balance - invoice.amount - fees,
+      channelSize: this.state.channelSize,
+      balance: this.state.balance - amount - totalFee,
+      feeCredit: this.state.feeCredit - ourFee,
     };
   }
 
@@ -127,7 +133,7 @@ export class Wallet {
 
   // NOTE: this is the only mutating method that can be called in
   // parallel by many threads, we should take great care about
-  // avoiding races, especially btw different wallets 
+  // avoiding races, especially btw different wallets
   public async payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
@@ -169,7 +175,11 @@ export class Wallet {
         ppmFee: r.fee_proportional_millionths,
       })) || [];
 
-    // check if client has enough balance
+    // check if client has enough balance,
+    // NOTE: this is upper-bound estimate if several payments are going
+    // in parallel bcs both will use the same feeCredit value,
+    // later when settled one fee will be deduced from feeCredit
+    // first and the next payment will have lower actual fee
     const feeEstimate = this.context.fees.estimatePaymentFeeMsat(
       this.state,
       invoice.amount,
@@ -210,19 +220,28 @@ export class Wallet {
       // done
       this.pendingPayments.delete(invoice.payment_hash);
 
+      // paid to phoenix
+      const phoenixFee = r.fees_paid || 0;
+
       // determine fees for this payment
-      const fees = this.context.fees.calcPaymentFeeMsat(
+      const totalFee = this.context.fees.calcPaymentFeeMsat(
         this.state,
         invoice.amount,
-        r.fees_paid || 0
+        phoenixFee
       );
-      const newState = this.prepareStateSettlePayment(invoice, fees);
+
+      // new wallet state accounting for payment and fees
+      const newState = this.prepareStateSettlePayment(
+        invoice.amount,
+        totalFee,
+        phoenixFee
+      );
 
       // settle payment - set status to paid and update the wallet state
       this.context.db.settlePayment(
         req.clientPubkey,
         invoice.payment_hash,
-        fees,
+        totalFee,
         newState
       );
 
@@ -235,7 +254,7 @@ export class Wallet {
         } msat => state ${JSON.stringify(this.state)}`
       );
 
-      if (this.state.balance < 0) {
+      if (this.state.balance < this.state.feeCredit) {
         console.error(
           new Date(),
           "negative wallet balance",

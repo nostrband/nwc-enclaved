@@ -8,7 +8,6 @@ import {
 import { RouteHop, WalletState } from "./types";
 
 export class PhoenixFeePolicy implements IFeePolicy {
-
   private miningFeeEstimate: number = 0;
   private miningFeePaid: number = 0;
   private miningFeeReceived: number = 0;
@@ -41,7 +40,9 @@ export class PhoenixFeePolicy implements IFeePolicy {
     // charge faster than needed, but that seems fine
 
     // that's how much we will charge for this specific extension
-    return Math.ceil(targetFee * channelExtensionAmount / PHOENIX_AUTO_LIQUIDITY_AMOUNT);
+    return Math.ceil(
+      (targetFee * channelExtensionAmount) / PHOENIX_AUTO_LIQUIDITY_AMOUNT
+    );
   }
 
   getLiquidityServiceFeeRate() {
@@ -49,8 +50,11 @@ export class PhoenixFeePolicy implements IFeePolicy {
   }
 
   private calcOurPaymentFee(wallet: WalletState, amount: number) {
-    // we charge from fee credit this wallet has accumulated
-    return Math.ceil(amount * wallet.feeCredit / wallet.balance);
+    // we charge from fee credit this wallet has accumulated,
+    // spread over wallet's **available** balance (balance - feeCredit)
+    return Math.ceil(
+      (amount * wallet.feeCredit) / (wallet.balance - wallet.feeCredit)
+    );
   }
 
   calcPaymentFeeMsat(wallet: WalletState, amount: number, fees_paid: number) {
@@ -58,7 +62,11 @@ export class PhoenixFeePolicy implements IFeePolicy {
     return fees_paid + this.calcOurPaymentFee(wallet, amount);
   }
 
-  estimatePaymentFeeMsat(wallet: WalletState, amount: number, route: RouteHop[]) {
+  estimatePaymentFeeMsat(
+    wallet: WalletState,
+    amount: number,
+    route: RouteHop[]
+  ) {
     // NOTE: looks like Phoenix always charges floor(0.4%) + 4 sats no matter
     // what actual routing fees are, that's great and simple
     const phoenixFee =
