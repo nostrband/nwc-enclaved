@@ -166,7 +166,9 @@ export class Wallet {
 
   // NOTE: this is the only mutating method that can be called in
   // parallel by many threads, we should take great care about
-  // avoiding races, especially btw different wallets
+  // avoiding races, especially btw different wallets. Right now
+  // there's basically only 1 async call to phoenix - need
+  // to keep it this way.
   public async payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
