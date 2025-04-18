@@ -1,14 +1,16 @@
-import { OnIncomingPaymentEvent } from "./phoenixd";
+import { WalletContext } from "./abstract";
+import { DEFAULT_EXPIRY } from "./consts";
 import {
   INSUFFICIENT_BALANCE,
   Invoice,
   ListTransactionsReq,
   MakeInvoiceReq,
+  OnIncomingPaymentEvent,
   PayInvoiceReq,
   PaymentResult,
   Transaction,
 } from "./types";
-import { Wallet, WalletContext } from "./wallet";
+import { Wallet } from "./wallet";
 
 export class Wallets {
   private context: WalletContext;
@@ -29,14 +31,14 @@ export class Wallets {
     }
   }
 
-  public onIncomingPayment(p: OnIncomingPaymentEvent) {
-    if (!p.externalId) {
-      console.log(new Date(), "unknown incoming payment", p);
+  public onIncomingPayment(payment: OnIncomingPaymentEvent) {
+    if (!payment.externalId) {
+      console.log(new Date(), "unknown incoming payment", payment);
       return;
     }
-    const clientPubkey = this.context.db.getInvoicePubkey(p.externalId!);
-    if (!clientPubkey) {
-      console.log("skip unknown invoice", p.externalId);
+    const { clientPubkey, invoice } = this.context.db.getInvoiceById(payment.externalId!) || {};
+    if (!clientPubkey || !invoice) {
+      console.log("skip unknown invoice", payment.externalId);
       return;
     }
 
@@ -45,7 +47,7 @@ export class Wallets {
       w = new Wallet(clientPubkey, this.context);
       this.wallets.set(clientPubkey, w);
     }
-    w.settleInvoice(p);
+    w.settleInvoice(invoice, payment);
   }
 
   public getInfo(clientPubkey: string): Promise<{
@@ -102,6 +104,12 @@ export class Wallets {
   public async makeInvoice(req: MakeInvoiceReq): Promise<Invoice> {
     const id = this.context.db.createInvoice(req.clientPubkey);
     try {
+      const w = this.wallets.get(req.clientPubkey);
+
+      // make sure empty wallets only create short-lived
+      // invoices to avoid db explosion
+      if (!w) req.expiry = DEFAULT_EXPIRY;
+
       const invoice = await this.context.phoenix.makeInvoice(id, req);
       this.context.db.completeInvoice(id, invoice);
       return invoice;

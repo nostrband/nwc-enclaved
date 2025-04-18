@@ -1,8 +1,8 @@
-import { Signer } from "./types";
+import { Signer } from "./abstract";
 import { Nip04 } from "./nip04";
 import { UnsignedEvent, finalizeEvent, getPublicKey } from "nostr-tools";
 
-export class SignerImpl implements Signer {
+export class PrivateKeySigner implements Signer {
   private privkey: Uint8Array;
   private nip04 = new Nip04();
 

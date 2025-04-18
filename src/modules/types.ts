@@ -1,17 +1,6 @@
-import { Event, UnsignedEvent } from "nostr-tools";
-
-export interface Signer {
-  getPublicKey(): string;
-
-  signEvent(event: UnsignedEvent): Promise<Event>;
-
-  nip04Encrypt(pubkey: string, data: string): Promise<string>;
-
-  nip04Decrypt(pubkey: string, data: string): Promise<string>;
-}
-
 export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 export const PAYMENT_FAILED = "PAYMENT_FAILED";
+export const RATE_LIMITED = "RATE_LIMITED";
 
 export type ErrorCode =
   | "INSUFFICIENT_BALANCE"
@@ -108,4 +97,15 @@ export interface WalletState {
   balance: number;
   channelSize: number;
   feeCredit: number;
+}
+
+export interface OnIncomingPaymentEvent {
+  paymentHash: string;
+  settledAt: number;
+  externalId?: string;
+}
+
+export interface RouteHop {
+  baseFee: number;
+  ppmFee: number;
 }

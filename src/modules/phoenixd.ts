@@ -1,5 +1,9 @@
 import { MessageEvent, WebSocket } from "ws";
-import { DEFAULT_EXPIRY, PHOENIX_PORT } from "./consts";
+import {
+  DEFAULT_EXPIRY,
+  PHOENIX_AUTO_LIQUIDITY_AMOUNT,
+  PHOENIX_PORT,
+} from "./consts";
 import {
   Invoice,
   MakeInvoiceReq,
@@ -8,6 +12,7 @@ import {
   PaymentResult,
 } from "./types";
 import { now } from "./utils";
+import { IPhoenixd, OnIncomingPayment, OnLiquidityFee, OnMiningFeeEstimate } from "./abstract";
 
 interface PayInvoiceRequest {
   invoice: string;
@@ -36,36 +41,67 @@ interface MakeInvoiceReply {
   serialized: string;
 }
 
-export interface OnIncomingPaymentEvent {
-  amount: number;
-  paymentHash: string;
-  settledAt: number;
+interface IncomingPayment {
   externalId?: string;
+  completedAt: number;
+  receivedSat: number;
+  fees: number;
+  paymentHash: string;
 }
 
-export type OnIncomingPayment = (p: OnIncomingPaymentEvent) => Promise<void>;
-
-export class Phoenixd {
+export class Phoenixd implements IPhoenixd {
   private password?: string;
   private ws?: WebSocket;
+  private incomingPaymentQueue: IncomingPayment[] = [];
   private onOpen?: () => void;
   private onIncomingPayment?: OnIncomingPayment;
+  private onMiningFeeEstimate?: OnMiningFeeEstimate;
+  private onLiquidityFee?: OnLiquidityFee; 
 
   constructor() {}
 
   public async start({
     password,
     onIncomingPayment,
+    onMiningFeeEstimate,
+    onLiquidityFee,
     onOpen,
   }: {
     password: string;
     onIncomingPayment: OnIncomingPayment;
+    onMiningFeeEstimate: OnMiningFeeEstimate;
+    onLiquidityFee: OnLiquidityFee;
     onOpen: () => void;
   }) {
     this.password = password;
     this.onIncomingPayment = onIncomingPayment;
+    this.onMiningFeeEstimate = onMiningFeeEstimate;
+    this.onLiquidityFee = onLiquidityFee;
     this.onOpen = onOpen;
     this.subscribe();
+    this.estimateMiningFees();
+  }
+
+  private async estimateMiningFees() {
+    try {
+      const r = await this.call<{
+        miningFeeSat: number;
+        serviceFeeSat: number;
+      }>("GET", "estimateliquidityfees", {
+        amountSat: PHOENIX_AUTO_LIQUIDITY_AMOUNT / 1000,
+      });
+
+      // notify clients
+      this.onMiningFeeEstimate!(r.miningFeeSat * 1000, r.serviceFeeSat * 1000);
+
+      // repeat in 10 minutes
+      setTimeout(() => this.estimateMiningFees(), 600000);
+    } catch (e) {
+      console.error(new Date(), "failed to estimate fees", e);
+
+      // retry in 1 minute
+      setTimeout(() => this.estimateMiningFees(), 60000);
+    }
   }
 
   private subscribe() {
@@ -100,18 +136,62 @@ export class Phoenixd {
     }
   }
 
+  private async processIncomingPayments() {
+    const p = this.incomingPaymentQueue[0];
+    try {
+      // first take paid liquidity fees into account
+      if (p.fees) {
+        await this.onLiquidityFee!(p.fees);
+      }
+  
+      // next pass the payment
+      await this.onIncomingPayment!({
+        paymentHash: p.paymentHash,
+        settledAt: Math.round(p.completedAt / 1000),
+        externalId: p.externalId,
+      });
+  
+    } catch (e) {
+      console.error(new Date(), "error processing incoming payment", p, e);
+    }
+
+    // drop processed payment
+    this.incomingPaymentQueue.shift();
+
+    // process next event if we have one
+    if (this.incomingPaymentQueue.length > 0) this.processIncomingPayments();
+  }
+
+  private scheduleIncomingPayment(p: IncomingPayment) {
+    // NOTE: we're processing them in 1 thread to
+    // avoid potential races in balance/fee calculations
+    this.incomingPaymentQueue.push(p);
+    if (this.incomingPaymentQueue.length === 1) {
+      this.processIncomingPayments();
+    }
+  }
+
   private async onMessage(data: string) {
     try {
       const m = JSON.parse(data);
+      console.log(new Date(), "phoenixd message", m);
       if (m.type === "payment_received") {
-        const p: OnIncomingPaymentEvent = {
-          amount: m.amountSat * 1000,
-          paymentHash: m.paymentHash,
-          settledAt: m.settledAt,
-          externalId: m.externalId,
-        };
-        p.settledAt = now();
-        await this.onIncomingPayment!(p);
+        if (!m.paymentHash) {
+          console.error(
+            new Date(),
+            "phoenixd received payment without payment hash",
+            m
+          );
+          return;
+        }
+
+        const payment = await this.call<IncomingPayment>(
+          "GET",
+          `payments/incoming/${m.paymentHash}`,
+          {}
+        );
+
+        this.scheduleIncomingPayment(payment);
       }
     } catch (e) {
       console.log(new Date(), "phoenixd bad message", data, e);
@@ -200,22 +280,16 @@ export class Phoenixd {
 
   public async syncPaymentsSince(fromSec: number) {
     console.log(new Date(), "phoenixd sync from", fromSec);
-    const payments = await this.call<
-      {
-        externalId?: string;
-        completedAt: number;
-        receivedSat: number;
-        paymentHash: string;
-      }[]
-    >("GET", "payments/incoming", { from: fromSec * 1000 });
-    for (const p of payments) {
+    const payments = await this.call<IncomingPayment[]>(
+      "GET",
+      "payments/incoming",
+      { from: fromSec * 1000 }
+    );
+
+    // parse new payments in proper older-to-newer order
+    for (const p of payments.reverse()) {
       console.log(new Date(), "phoenixd sync incoming payment", p);
-      this.onIncomingPayment!({
-        amount: p.receivedSat * 1000,
-        paymentHash: p.paymentHash,
-        settledAt: Math.round(p.completedAt / 1000),
-        externalId: p.externalId,
-      });
+      this.scheduleIncomingPayment(p);
     }
   }
 }

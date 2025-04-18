@@ -1,21 +1,24 @@
-import { Event, generateSecretKey, getPublicKey } from "nostr-tools";
-import { Nip47Server } from "./modules/nip47";
+import { Event, getPublicKey } from "nostr-tools";
+import { NWCServer } from "./modules/nwc";
 import { Relay } from "./modules/relay";
 import { RequestListener } from "./modules/listeners";
-import { Nip47Rep, Nip47Req, PAYMENT_FAILED, Signer } from "./modules/types";
-import { SignerImpl } from "./modules/signer";
+import { Nip47Rep, Nip47Req, PAYMENT_FAILED } from "./modules/types";
+import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenixd } from "./modules/phoenixd";
-import fs from "node:fs";
-import { bytesToHex } from "@noble/hashes/utils";
 import { PHOENIX_PASSWORD } from "./modules/consts";
+import { Signer } from "./modules/abstract";
+import { PhoenixFeePolicy } from "./modules/fees";
+import { getSecretKey } from "./modules/key";
 
 const db = new DB();
 const phoenix = new Phoenixd();
-const wallets = new Wallets({ phoenix, db });
+const fees = new PhoenixFeePolicy();
+const wallets = new Wallets({ phoenix, db, fees });
 
-class Server extends Nip47Server {
+// forward NWC calls to wallets
+class Server extends NWCServer {
   constructor(signer: Signer) {
     super(signer);
   }
@@ -64,28 +67,19 @@ class Server extends Nip47Server {
   }
 }
 
-function getSecretKey() {
-  const FILE = "./.admin.sk";
-  if (fs.existsSync(FILE)) {
-    const hex = fs.readFileSync(FILE).toString("utf8");
-    const privkey = Buffer.from(hex, "hex");
-    if (privkey.length !== 32) throw new Error("Invalid privkey");
-    return privkey;
-  }
-
-  const privkey = generateSecretKey();
-  fs.writeFileSync(FILE, bytesToHex(privkey));
-  return privkey;
-}
-
 export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   // new admin key on every restart
   const adminPrivkey = getSecretKey();
-  const adminSigner = new SignerImpl(adminPrivkey);
+  const adminSigner = new PrivateKeySigner(adminPrivkey);
   const adminPubkey = getPublicKey(adminPrivkey);
   console.log("adminPubkey", adminPubkey);
 
-  // load all wallets 
+  // fetch global mining fee state
+  const feeState = db.getFees();
+  fees.addMiningFeePaid(feeState.miningFeePaid);
+  fees.addMiningFeeReceived(feeState.miningFeeReceived);
+
+  // load all wallets
   wallets.start(adminPubkey);
 
   // start phoenix client and sync incoming payments
@@ -93,6 +87,11 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
     password: PHOENIX_PASSWORD,
     onIncomingPayment: async (p) => wallets.onIncomingPayment(p),
     onOpen: () => phoenix.syncPaymentsSince(db.getLastInvoiceSettledAt()),
+    onMiningFeeEstimate: (miningFee: number) =>
+      fees.setMiningFeeEstimate(miningFee),
+    onLiquidityFee: async (fee: number) => {
+      fees.addMiningFeePaid(fee);
+    }
   });
 
   // list of nip47 handlers: admin + all user keys

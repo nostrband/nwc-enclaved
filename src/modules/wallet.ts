@@ -1,27 +1,19 @@
-import { DB } from "./db";
-import { OnIncomingPaymentEvent, Phoenixd } from "./phoenixd";
 import bolt11 from "bolt11";
 import {
+  INSUFFICIENT_BALANCE,
   Invoice,
   ListTransactionsReq,
+  OnIncomingPaymentEvent,
   PAYMENT_FAILED,
   PayInvoiceReq,
   PaymentResult,
+  RATE_LIMITED,
+  RouteHop,
   Transaction,
   WalletState,
 } from "./types";
-
-export interface FeePolicy {
-  getLiquidityFee(): number;
-  calcPaymentFee(amount: number, fees_paid: number): number;
-  estimateRoutingFee(amount: number, routes: any[]): number;
-}
-
-export interface WalletContext {
-  phoenix: Phoenixd;
-  db: DB;
-  fees: FeePolicy;
-}
+import { WalletContext } from "./abstract";
+import { MAX_CONCURRENT_PAYMENTS } from "./consts";
 
 export class Wallet {
   private context: WalletContext;
@@ -43,25 +35,40 @@ export class Wallet {
     return this.pubkey;
   }
 
-  private prepareStateSettleInvoice(p: OnIncomingPaymentEvent) {
+  private prepareStateSettleInvoice(amount: number) {
     const newState = { ...this.state };
-    newState.balance = this.state.balance + p.amount;
 
-    if (p.amount > this.state.channelSize) {
+    // always put the full received amount on the balance
+    newState.balance = this.state.balance + amount;
+
+    // we might need to pay some mining fees for auto-liquidity
+    let miningFee = 0;
+
+    // need to extend our virtual channel?
+    if (newState.balance > this.state.channelSize) {
       // extend virtual channel by a round number of sats
-      const channelExtensionSize = Math.ceil((newState.balance - this.state.channelSize) / 1000) * 1000;
-      
+      const channelExtensionAmount =
+        Math.ceil((newState.balance - this.state.channelSize) / 1000) * 1000;
+
       // set new size
-      newState.channelSize += channelExtensionSize;
+      newState.channelSize += channelExtensionAmount;
 
-      // set fee credit for channel extension
-      newState.feeCredit += channelExtensionSize * this.context.fees.getLiquidityFee();
+      // auto-liquidity service fee
+      newState.feeCredit += Math.ceil(
+        channelExtensionAmount * this.context.fees.getLiquidityServiceFeeRate()
+      );
 
-      // we will spread the payout of feeCredit over this many payment sats
-      newState.feeCreditBase += channelExtensionSize;
+      // calc mining fee separately to return it to caller
+      miningFee = Math.ceil(
+        channelExtensionAmount *
+          this.context.fees.calcMiningFeeMsat(channelExtensionAmount)
+      );
+
+      // add mining fee to wallet's fee credit
+      newState.feeCredit += miningFee;
     }
 
-    return newState;
+    return { newState, miningFee };
   }
 
   private prepareStateSettlePayment(invoice: Invoice, fees: number) {
@@ -71,21 +78,34 @@ export class Wallet {
     };
   }
 
-  public settleInvoice(p: OnIncomingPaymentEvent) {
-    const newState = this.prepareStateSettleInvoice(p);
+  public settleInvoice(invoice: Invoice, p: OnIncomingPaymentEvent) {
+    // prepare new state and calc miningFee
+    const { newState, miningFee } = this.prepareStateSettleInvoice(
+      invoice.amount
+    );
+
+    // settle as an atomic tx in db
     const ok = this.context.db.settleInvoice(
       this.pubkey,
       p.externalId!,
       p.settledAt,
-      newState
+      newState,
+      miningFee
     );
+
+    // !ok if invoice was already settled
     if (!ok) return;
 
+    // new wallet state
     this.state = newState;
+
+    // account for mining fee received from this wallet
+    this.context.fees.addMiningFeeReceived(miningFee);
+
     console.log(
       new Date(),
       `incoming payment to ${this.pubkey} amount ${
-        p.amount
+        invoice.amount
       } sat => state ${JSON.stringify(this.state)}`
     );
   }
@@ -105,12 +125,21 @@ export class Wallet {
     return Promise.resolve(this.context.db.listTransactions(req));
   }
 
+  // NOTE: this is the only mutating method that can be called in
+  // parallel by many threads, we should take great care about
+  // avoiding races, especially btw different wallets 
   public async payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
+    if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS)
+      throw new Error(RATE_LIMITED);
+
     // parse invoice to get amount and paymentHash
     const decoded = bolt11.decode(req.invoice);
+    if (!decoded.complete) throw new Error("Incomplete invoice");
+
     console.log("decoded invoice", decoded);
+    console.log("tagsObject", decoded.tagsObject);
     const invoice: Invoice = {
       type: "incoming",
       invoice: "",
@@ -128,17 +157,49 @@ export class Wallet {
     if (invoice.amount % 1000 > 0)
       throw new Error("Msat payments not supported");
 
-    // check if client has enough balance
-    const feeEstimate = this.context.fees.estimateRoutingFee(invoice.amount, routes);
-    // FIXME
-    const lockedAmount = invoice.amount;
-
-    // protect against double-entry in our db
+    // already paying this?
     if (this.pendingPayments.has(invoice.payment_hash))
       throw new Error(PAYMENT_FAILED);
-    this.pendingPayments.set(invoice.payment_hash, lockedAmount);
 
-    // create payment template
+    // make sure to take a prescribed route into account to make sure
+    // we aren't attacked with huge-fee routes that we wouldn't estimate
+    const route: RouteHop[] =
+      decoded.tagsObject.routing_info?.map((r) => ({
+        baseFee: r.fee_base_msat,
+        ppmFee: r.fee_proportional_millionths,
+      })) || [];
+
+    // check if client has enough balance
+    const feeEstimate = this.context.fees.estimatePaymentFeeMsat(
+      this.state,
+      invoice.amount,
+      route
+    );
+
+    // amount we're locking for this payment
+    const lockAmount = invoice.amount + feeEstimate;
+
+    // =======================================
+    // NOTE: this section must be **sync**
+    // to make sure other concurrent payments can't
+    // overspend by racing with this payment
+    (() => {
+      // already locked by other payments
+      const lockedAmount = [...this.pendingPayments.values()].reduce(
+        (s, l) => (s += l),
+        0
+      );
+
+      // not enough balance if we include pending payments?
+      if (lockAmount + lockedAmount > this.state.balance)
+        throw new Error(INSUFFICIENT_BALANCE);
+    })();
+    // =======================================
+
+    // add this payment to pending
+    this.pendingPayments.set(invoice.payment_hash, lockAmount);
+
+    // create payment placeholder
     this.context.db.createPayment(req.clientPubkey, invoice);
 
     try {
@@ -150,10 +211,14 @@ export class Wallet {
       this.pendingPayments.delete(invoice.payment_hash);
 
       // determine fees for this payment
-      const fees = this.context.fees.calcPaymentFee(invoice.amount, r.fees_paid || 0);
+      const fees = this.context.fees.calcPaymentFeeMsat(
+        this.state,
+        invoice.amount,
+        r.fees_paid || 0
+      );
       const newState = this.prepareStateSettlePayment(invoice, fees);
 
-      // set payment template status to paid and record fee
+      // settle payment - set status to paid and update the wallet state
       this.context.db.settlePayment(
         req.clientPubkey,
         invoice.payment_hash,
@@ -169,6 +234,15 @@ export class Wallet {
           invoice.amount
         } msat => state ${JSON.stringify(this.state)}`
       );
+
+      if (this.state.balance < 0) {
+        console.error(
+          new Date(),
+          "negative wallet balance",
+          this.pubkey,
+          JSON.stringify(this.state)
+        );
+      }
 
       // result
       return r;

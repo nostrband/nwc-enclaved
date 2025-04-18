@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { Nip47Client } from "./modules/nip47-client";
+import { Nip47Client } from "./modules/nwc-client";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import readline from "node:readline";
 import fs from "node:fs";

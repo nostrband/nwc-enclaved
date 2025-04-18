@@ -1,9 +1,10 @@
-import { Nip47Rep, Nip47Req, Signer } from "./types";
+import { Nip47Rep, Nip47Req } from "./types";
 import { Event } from "nostr-tools";
 import { now } from "./utils";
 import { KIND_NWC_REPLY, KIND_NWC_REQUEST } from "./consts";
+import { Signer } from "./abstract";
 
-export class Nip47Server {
+export class NWCServer {
   private signer: Signer;
 
   constructor(signer: Signer) {

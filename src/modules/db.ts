@@ -7,8 +7,9 @@ import {
   WalletState,
 } from "./types";
 import { now } from "./utils";
+import { IDB } from "./abstract";
 
-export class DB {
+export class DB implements IDB {
   private db: DatabaseSync;
 
   constructor() {
@@ -35,8 +36,15 @@ export class DB {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         pubkey TEXT,
         balance INTEGER DEFAULT 0,
-        channelSize INTEGER DEFAULT 0,
-        feeCredit INTEGER DEFAULT 0
+        channel_size INTEGER DEFAULT 0,
+        fee_credit INTEGER DEFAULT 0
+      )
+    `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS fees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mining_fee_paid INTEGER DEFAULT 0,
+        mining_fee_received INTEGER DEFAULT 0
       )
     `);
     this.db.exec(`
@@ -69,6 +77,29 @@ export class DB {
     this.db.close();
   }
 
+  public addMiningFeePaid(fee: number) {
+    const fees = this.db.prepare(`
+      INSERT INTO fees (id, mining_fee_paid, mining_fee_received) 
+      VALUES (1, ?, 0)
+      ON CONFLICT(id) DO UPDATE 
+      SET
+        mining_fee_paid = mining_fee_paid + ?
+    `);
+    const f = fees.run(fee, fee);
+    if (!f.changes) throw new Error("Failed to update mining_fee_paid");
+  }
+
+  public getFees(): { miningFeeReceived: number; miningFeePaid: number } {
+    const select = this.db.prepare(`
+      SELECT * FROM fees WHERE id = 1
+    `);
+    const rec = select.get();
+    return {
+      miningFeePaid: (rec?.mining_fee_paid as number) || 0,
+      miningFeeReceived: (rec?.mining_fee_received as number) || 0,
+    };
+  }
+
   public listWallets(): {
     pubkey: string;
     state: WalletState;
@@ -81,8 +112,8 @@ export class DB {
       pubkey: r.pubkey as string,
       state: {
         balance: r.balance as number,
-        channelSize: r.channelSize as number,
-        feeCredit: r.feeCredit as number,
+        channelSize: r.channel_size as number,
+        feeCredit: r.fee_credit as number,
       },
     }));
   }
@@ -133,26 +164,40 @@ export class DB {
     if (r.changes !== 1) throw new Error("Invoice not found by id");
   }
 
-  public getInvoicePubkey(id: string) {
+  public getInvoiceById(
+    id: string
+  ): { invoice: Invoice; clientPubkey: string } | undefined {
     const select = this.db.prepare(
-      `SELECT pubkey FROM records WHERE id = ? AND is_outgoing = 0`
+      `SELECT * FROM records WHERE id = ? AND is_outgoing = 0`
     );
-    const pubkey = select.get(id);
-    if (!pubkey) return "";
-    return pubkey.pubkey as string;
+    const r = select.get(id);
+    if (!r) return undefined;
+    const tx = this.recToTx(r);
+    if (tx.type === "outgoing") throw new Error("Invalid type");
+    const invoice: Invoice = {
+      ...tx,
+      expires_at: tx.expires_at!,
+      type: "incoming",
+      invoice: "",
+    };
+    return {
+      invoice,
+      clientPubkey: r.pubkey as string,
+    };
   }
 
   public settleInvoice(
     clientPubkey: string,
     id: string,
     settledAt: number,
-    walletState: WalletState
+    walletState: WalletState,
+    miningFee: number
   ) {
     // tx to settle the invoice and update the wallet balance
     this.db.exec("BEGIN TRANSACTION");
 
     try {
-      const expectedPubkey = this.getInvoicePubkey(id);
+      const { clientPubkey: expectedPubkey } = this.getInvoiceById(id) || {};
       if (expectedPubkey !== clientPubkey)
         throw new Error("Invalid clientPubkey for settleInvoice");
 
@@ -173,6 +218,16 @@ export class DB {
         this.db.exec("ROLLBACK TRANSACTION");
         return false;
       }
+
+      const fees = this.db.prepare(`
+        INSERT INTO fees (id, mining_fee_paid, mining_fee_received) 
+        VALUES (1, 0, ?)
+        ON CONFLICT(id) DO UPDATE 
+        SET
+          mining_fee_received = mining_fee_received + ?
+      `);
+      const f = fees.run(miningFee, miningFee);
+      if (!f.changes) throw new Error("Failed to update mining_fee_received");
 
       // update wallet
       this.updateWalletState(clientPubkey, walletState);
@@ -225,13 +280,13 @@ export class DB {
   private updateWalletState(clientPubkey: string, walletState: WalletState) {
     // update wallet
     const wallet = this.db.prepare(`
-      INSERT INTO wallets (pubkey, balance, channelSize, feeCredit) 
+      INSERT INTO wallets (pubkey, balance, channel_size, fee_credit) 
       VALUES (?, ?, ?, ?)
       ON CONFLICT(pubkey) DO UPDATE 
       SET
         balance = ?,
-        channelSize = ?,
-        feeCredit = ?
+        channel_size = ?,
+        fee_credit = ?
     `);
     const wr = wallet.run(
       clientPubkey,
@@ -285,6 +340,21 @@ export class DB {
     this.db.exec("COMMIT TRANSACTION");
   }
 
+  private recToTx(r: Record<string, any>): Transaction {
+    return {
+      type: r.is_outgoing ? "outgoing" : "incoming",
+      description: (r.description as string) || undefined,
+      description_hash: (r.description_hash as string) || undefined,
+      preimage: (r.preimage as string) || undefined,
+      payment_hash: r.payment_hash as string,
+      amount: (r.amount as number) || 0,
+      fees_paid: (r.fees_paid as number) || 0,
+      created_at: (r.created_at as number) || 0,
+      expires_at: (r.expires_at as number) || 0,
+      settled_at: (r.settled_at as number) || 0,
+    };
+  }
+
   public listTransactions(req: ListTransactionsReq): {
     transactions: Transaction[];
   } {
@@ -318,18 +388,7 @@ export class DB {
 
     const recs = select.all(...args);
     return {
-      transactions: recs.map((r) => ({
-        type: r.is_outgoing ? "outgoing" : "incoming",
-        description: (r.description as string) || undefined,
-        description_hash: (r.description_hash as string) || undefined,
-        preimage: (r.preimage as string) || undefined,
-        payment_hash: r.payment_hash as string,
-        amount: (r.amount as number) || 0,
-        fees_paid: (r.fees_paid as number) || 0,
-        created_at: (r.created_at as number) || 0,
-        expires_at: (r.expires_at as number) || 0,
-        settled_at: (r.settled_at as number) || 0,
-      })),
+      transactions: recs.map((r) => this.recToTx(r)),
     };
   }
 
