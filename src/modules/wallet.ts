@@ -131,6 +131,39 @@ export class Wallet {
     return Promise.resolve(this.context.db.listTransactions(req));
   }
 
+  private parseBolt11(bolt11str: string, amount?: number) {
+    // parse invoice to get amount and paymentHash
+    const decoded = bolt11.decode(bolt11str);
+    if (!decoded.complete) throw new Error("Incomplete invoice");
+
+    console.log("decoded invoice", decoded);
+    console.log("tagsObject", decoded.tagsObject);
+    const invoice: Invoice = {
+      type: "incoming",
+      invoice: "",
+      amount: amount || Number(decoded.millisatoshis),
+      payment_hash: decoded.tagsObject.payment_hash!,
+      description: decoded.tagsObject.description,
+      description_hash: decoded.tagsObject.purpose_commit_hash,
+      created_at: decoded.timestamp!,
+      expires_at: decoded.timestamp! + decoded.timeExpireDate!,
+    };
+
+    const preimage = decoded.tagsObject.payment_secret;
+
+    const route: RouteHop[] =
+      decoded.tagsObject.routing_info?.map((r) => ({
+        baseFee: r.fee_base_msat,
+        ppmFee: r.fee_proportional_millionths,
+      })) || [];
+
+    return {
+      invoice,
+      preimage,
+      route,
+    };
+  }
+
   // NOTE: this is the only mutating method that can be called in
   // parallel by many threads, we should take great care about
   // avoiding races, especially btw different wallets
@@ -140,24 +173,12 @@ export class Wallet {
     if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS)
       throw new Error(RATE_LIMITED);
 
-    // parse invoice to get amount and paymentHash
-    const decoded = bolt11.decode(req.invoice);
-    if (!decoded.complete) throw new Error("Incomplete invoice");
+    // parse bolt11 string
+    const { invoice, preimage, route } = this.parseBolt11(
+      req.invoice,
+      req.amount
+    );
 
-    console.log("decoded invoice", decoded);
-    console.log("tagsObject", decoded.tagsObject);
-    const invoice: Invoice = {
-      type: "incoming",
-      invoice: "",
-      amount: req.amount || Number(decoded.millisatoshis),
-      payment_hash: decoded.tagsObject.payment_hash!,
-      description: decoded.tagsObject.description,
-      description_hash: decoded.tagsObject.purpose_commit_hash,
-      created_at: decoded.timestamp!,
-      expires_at: decoded.timestamp! + decoded.timeExpireDate!,
-    };
-
-    const preimage = decoded.tagsObject.payment_secret;
     if (!invoice.payment_hash) throw new Error("Invalid invoice");
     if (!invoice.amount) throw new Error("Empty amount");
     if (invoice.amount % 1000 > 0)
@@ -167,15 +188,9 @@ export class Wallet {
     if (this.pendingPayments.has(invoice.payment_hash))
       throw new Error(PAYMENT_FAILED);
 
-    // make sure to take a prescribed route into account to make sure
-    // we aren't attacked with huge-fee routes that we wouldn't estimate
-    const route: RouteHop[] =
-      decoded.tagsObject.routing_info?.map((r) => ({
-        baseFee: r.fee_base_msat,
-        ppmFee: r.fee_proportional_millionths,
-      })) || [];
-
     // check if client has enough balance,
+    // take the prescribed route into account to make sure
+    // we aren't attacked with huge-fee routes that we wouldn't estimate
     // NOTE: this is upper-bound estimate if several payments are going
     // in parallel bcs both will use the same feeCredit value,
     // later when settled one fee will be deduced from feeCredit
