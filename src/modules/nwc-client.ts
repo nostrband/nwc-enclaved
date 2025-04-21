@@ -3,7 +3,7 @@ import { Event, finalizeEvent, getPublicKey } from "nostr-tools";
 import { Relay } from "./relay";
 import { Nip04 } from "./nip04";
 import { now } from "./utils";
-import { Invoice, PaymentResult, Transaction } from "./types";
+import { NWCInvoice, NWCPaymentResult, NWCTransaction } from "./nwc-types";
 import { KIND_NWC_REPLY, KIND_NWC_REQUEST } from "./consts";
 
 const nip04 = new Nip04();
@@ -27,14 +27,14 @@ interface NWCWallet {
   payInvoice(params: {
     invoice: string;
     amount?: number;
-  }): Promise<PaymentResult>;
+  }): Promise<NWCPaymentResult>;
 
   makeInvoice(params: {
     amount: number;
     description?: string;
     description_hash?: string;
     expiry?: number;
-  }): Promise<Invoice>;
+  }): Promise<NWCInvoice>;
 
   makeInvoiceFor(params: {
     pubkey: string;
@@ -42,7 +42,7 @@ interface NWCWallet {
     description?: string;
     description_hash?: string;
     expiry?: number;
-  }): Promise<Invoice>;
+  }): Promise<NWCInvoice>;
 
   listTransactions(params: {
     from?: number;
@@ -52,11 +52,11 @@ interface NWCWallet {
     unpaid?: boolean;
     type?: "incoming" | "outgoing";
   }): Promise<{
-    transactions: Transaction;
+    transactions: NWCTransaction;
   }>;
 }
 
-export class Nip47Client implements NWCWallet {
+export class NWCClient implements NWCWallet {
   private relay: Relay;
   private walletPubkey?: string;
 
@@ -83,6 +83,10 @@ export class Nip47Client implements NWCWallet {
     this.privkey = privkey;
   }
 
+  public dispose() {
+    this.relay.dispose();
+  }
+
   public getRelay() {
     return this.relay;
   }
@@ -102,6 +106,7 @@ export class Nip47Client implements NWCWallet {
       method,
       params,
     };
+    console.log("req", req);
 
     const event = finalizeEvent(
       {
@@ -187,8 +192,8 @@ export class Nip47Client implements NWCWallet {
     offset?: number | undefined;
     unpaid?: boolean | undefined;
     type?: "incoming" | "outgoing" | undefined;
-  }): Promise<{ transactions: Transaction }> {
-    return this.send<{ transactions: Transaction }>({
+  }): Promise<{ transactions: NWCTransaction }> {
+    return this.send<{ transactions: NWCTransaction }>({
       method: "list_transactions",
       params,
     });
@@ -199,8 +204,8 @@ export class Nip47Client implements NWCWallet {
     description?: string | undefined;
     description_hash?: string | undefined;
     expiry?: number | undefined;
-  }): Promise<Invoice> {
-    return this.send<Invoice>({
+  }): Promise<NWCInvoice> {
+    return this.send<NWCInvoice>({
       method: "make_invoice",
       params,
     });
@@ -212,8 +217,9 @@ export class Nip47Client implements NWCWallet {
     description?: string | undefined;
     description_hash?: string | undefined;
     expiry?: number | undefined;
-  }): Promise<Invoice> {
-    return this.send<Invoice>({
+    zap_request?: string;
+  }): Promise<NWCInvoice> {
+    return this.send<NWCInvoice>({
       method: "make_invoice_for",
       params,
     });
@@ -222,8 +228,8 @@ export class Nip47Client implements NWCWallet {
   payInvoice(params: {
     invoice: string;
     amount?: number | undefined;
-  }): Promise<PaymentResult> {
-    return this.send<PaymentResult>({
+  }): Promise<NWCPaymentResult> {
+    return this.send<NWCPaymentResult>({
       method: "pay_invoice",
       params,
     });

@@ -1,18 +1,20 @@
 import bolt11 from "bolt11";
 import {
-  INSUFFICIENT_BALANCE,
-  Invoice,
-  ListTransactionsReq,
+  NWC_INSUFFICIENT_BALANCE,
+  NWCInvoice,
+  NWCListTransactionsReq,
+  NWC_PAYMENT_FAILED,
+  NWCPayInvoiceReq,
+  NWCPaymentResult,
+  NWC_RATE_LIMITED,
+  NWCTransaction,
+} from "./nwc-types";
+import {
   OnIncomingPaymentEvent,
-  PAYMENT_FAILED,
-  PayInvoiceReq,
-  PaymentResult,
-  RATE_LIMITED,
   RouteHop,
-  Transaction,
+  WalletContext,
   WalletState,
-} from "./types";
-import { WalletContext } from "./abstract";
+} from "./abstract";
 import { MAX_CONCURRENT_PAYMENTS } from "./consts";
 
 export class Wallet {
@@ -84,7 +86,7 @@ export class Wallet {
     };
   }
 
-  public settleInvoice(invoice: Invoice, p: OnIncomingPaymentEvent) {
+  public settleInvoice(invoice: NWCInvoice, p: OnIncomingPaymentEvent) {
     // prepare new state and calc miningFee
     const { newState, miningFee } = this.prepareStateSettleInvoice(
       invoice.amount
@@ -100,20 +102,21 @@ export class Wallet {
     );
 
     // !ok if invoice was already settled
-    if (!ok) return;
+    if (ok) {
+      // new wallet state
+      this.state = newState;
 
-    // new wallet state
-    this.state = newState;
+      // account for mining fee received from this wallet
+      this.context.fees.addMiningFeeReceived(miningFee);
 
-    // account for mining fee received from this wallet
-    this.context.fees.addMiningFeeReceived(miningFee);
-
-    console.log(
-      new Date(),
-      `incoming payment to ${this.pubkey} amount ${
-        invoice.amount
-      } sat => state ${JSON.stringify(this.state)}`
-    );
+      console.log(
+        new Date(),
+        `incoming payment to ${this.pubkey} amount ${
+          invoice.amount
+        } sat => state ${JSON.stringify(this.state)}`
+      );
+    }
+    return ok;
   }
 
   public getBalance(): Promise<{
@@ -125,8 +128,8 @@ export class Wallet {
   }
 
   public listTransactions(
-    req: ListTransactionsReq
-  ): Promise<{ transactions: Transaction[] }> {
+    req: NWCListTransactionsReq
+  ): Promise<{ transactions: NWCTransaction[] }> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
     return Promise.resolve(this.context.db.listTransactions(req));
   }
@@ -138,7 +141,7 @@ export class Wallet {
 
     console.log("decoded invoice", decoded);
     console.log("tagsObject", decoded.tagsObject);
-    const invoice: Invoice = {
+    const invoice: NWCInvoice = {
       type: "incoming",
       invoice: "",
       amount: amount || Number(decoded.millisatoshis),
@@ -169,11 +172,11 @@ export class Wallet {
   // avoiding races, especially btw different wallets. Right now
   // there's basically only 1 async call to phoenix - need
   // to keep it this way.
-  public async payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
+  public async payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
     if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS)
-      throw new Error(RATE_LIMITED);
+      throw new Error(NWC_RATE_LIMITED);
 
     // parse bolt11 string
     const { invoice, preimage, route } = this.parseBolt11(
@@ -188,7 +191,7 @@ export class Wallet {
 
     // already paying this?
     if (this.pendingPayments.has(invoice.payment_hash))
-      throw new Error(PAYMENT_FAILED);
+      throw new Error(NWC_PAYMENT_FAILED);
 
     // check if client has enough balance,
     // take the prescribed route into account to make sure
@@ -219,7 +222,7 @@ export class Wallet {
 
       // not enough balance if we include pending payments?
       if (lockAmount + lockedAmount > this.state.balance)
-        throw new Error(INSUFFICIENT_BALANCE);
+        throw new Error(NWC_INSUFFICIENT_BALANCE);
     })();
     // =======================================
 
@@ -231,7 +234,7 @@ export class Wallet {
 
     try {
       // pay
-      const r = await this.context.phoenix.payInvoice(req);
+      const r = await this.context.backend.payInvoice(req);
       if (r.preimage !== preimage) throw new Error("Wrong preimage");
 
       // done

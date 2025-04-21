@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { Nip47Client } from "./modules/nwc-client";
+import { NWCClient } from "./modules/nwc-client";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import readline from "node:readline";
 import fs from "node:fs";
@@ -63,7 +63,7 @@ async function client(opts: {
 }) {
   const params = JSON.parse(paramsJson) || {};
   const client = (privkey: Uint8Array) => {
-    const c = new Nip47Client({ relayUrl, walletPubkey, privkey });
+    const c = new NWCClient({ relayUrl, walletPubkey, privkey });
     c.start();
     return c;
   };

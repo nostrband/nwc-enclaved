@@ -1,4 +1,4 @@
-import { Nip47Rep, Nip47Req } from "./types";
+import { NWCReply, NWCRequest } from "./nwc-types";
 import { Event } from "nostr-tools";
 import { now } from "./utils";
 import { KIND_NWC_REPLY, KIND_NWC_REQUEST } from "./consts";
@@ -15,32 +15,38 @@ export class NWCServer {
     return this.signer;
   }
 
-  protected async payInvoice(req: Nip47Req, res: Nip47Rep) {
+  protected async payInvoice(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
 
-  protected async makeInvoice(req: Nip47Req, res: Nip47Rep) {
+  protected async makeInvoice(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
 
-  protected async listTransactions(req: Nip47Req, res: Nip47Rep) {
+  protected async makeInvoiceFor(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
 
-  protected async getBalance(req: Nip47Req, res: Nip47Rep) {
+  protected async listTransactions(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
 
-  protected async getInfo(req: Nip47Req, res: Nip47Rep) {
+  protected async getBalance(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
 
-  private async handle(req: Nip47Req, res: Nip47Rep) {
+  protected async getInfo(req: NWCRequest, res: NWCReply) {
+    throw new Error("Method not implemented");
+  }
+
+  private async handle(req: NWCRequest, res: NWCReply) {
     switch (req.method) {
       case "pay_invoice":
         return this.payInvoice(req, res);
       case "make_invoice":
         return this.makeInvoice(req, res);
+      case "make_invoice_for":
+        return this.makeInvoiceFor(req, res);
       case "list_transactions":
         return this.listTransactions(req, res);
       case "get_balance":
@@ -52,7 +58,7 @@ export class NWCServer {
     }
   }
 
-  private isValidReq(req: Nip47Req, res: Nip47Rep) {
+  private isValidReq(req: NWCRequest, res: NWCReply) {
     let valid = false;
     switch (req.method) {
       case "pay_invoice":
@@ -60,6 +66,14 @@ export class NWCServer {
         break;
       case "make_invoice":
         valid = !!req.params.amount && typeof req.params.amount === "number";
+        break;
+      case "make_invoice_for":
+        valid =
+          !!req.params.amount &&
+          typeof req.params.amount === "number" &&
+          !!req.params.pubkey &&
+          typeof req.params.pubkey === "string" &&
+          req.params.pubkey.length === 64;
         break;
       case "list_transactions":
         valid = true;
@@ -101,7 +115,7 @@ export class NWCServer {
       }
     } catch {}
 
-    const res: Nip47Rep = {
+    const res: NWCReply = {
       result_type: "",
       error: null,
       result: null,
@@ -113,12 +127,13 @@ export class NWCServer {
       if (!method || !params) throw new Error("Bad request");
 
       // req
-      const req: Nip47Req = {
+      const req: NWCRequest = {
         clientPubkey: e.pubkey,
         id: e.id,
         method,
         params,
       };
+      console.log(new Date(), "nwc request", req);
 
       // res
       res.result_type = method;
@@ -135,6 +150,7 @@ export class NWCServer {
       };
     }
 
+    console.log(new Date(), "nwc reply", res);
     return this.signer.signEvent({
       pubkey: await this.signer.getPublicKey(),
       kind: KIND_NWC_REPLY,

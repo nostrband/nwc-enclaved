@@ -1,13 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
 import { DB_PATH } from "./consts";
 import {
-  Invoice,
-  ListTransactionsReq,
-  Transaction,
-  WalletState,
-} from "./types";
+  NWCInvoice,
+  NWCListTransactionsReq,
+  NWCTransaction,
+} from "./nwc-types";
 import { now } from "./utils";
-import { IDB } from "./abstract";
+import { IDB, InvoiceInfo, WalletState } from "./abstract";
 
 export class DB implements IDB {
   private db: DatabaseSync;
@@ -28,7 +27,9 @@ export class DB implements IDB {
         fees_paid INTEGER DEFAULT 0,
         created_at INTEGER,
         expires_at INTEGER DEFAULT 0,
-        settled_at INTEGER DEFAULT 0
+        settled_at INTEGER DEFAULT 0,
+        zap_request TEXT DEFAULT '',
+        invoice TEXT DEFAULT ''
       )
     `);
     this.db.exec(`
@@ -140,7 +141,7 @@ export class DB implements IDB {
     del.run(id);
   }
 
-  public completeInvoice(id: string, invoice: Invoice) {
+  public completeInvoice(id: string, invoice: NWCInvoice, zapRequest?: string) {
     const update = this.db.prepare(`
       UPDATE records
       SET
@@ -149,7 +150,9 @@ export class DB implements IDB {
         description_hash = ?,
         amount = ?,
         created_at = ?,
-        expires_at = ?
+        expires_at = ?,
+        zap_request = ?,
+        invoice = ?
       WHERE id = ?
     `);
     const r = update.run(
@@ -159,14 +162,14 @@ export class DB implements IDB {
       invoice.amount,
       invoice.created_at,
       invoice.expires_at,
+      zapRequest || "",
+      invoice.invoice,
       id
     );
     if (r.changes !== 1) throw new Error("Invoice not found by id");
   }
 
-  public getInvoiceById(
-    id: string
-  ): { invoice: Invoice; clientPubkey: string } | undefined {
+  public getInvoiceById(id: string): InvoiceInfo | undefined {
     const select = this.db.prepare(
       `SELECT * FROM records WHERE id = ? AND is_outgoing = 0`
     );
@@ -174,15 +177,17 @@ export class DB implements IDB {
     if (!r) return undefined;
     const tx = this.recToTx(r);
     if (tx.type === "outgoing") throw new Error("Invalid type");
-    const invoice: Invoice = {
+    const invoice: NWCInvoice = {
       ...tx,
       expires_at: tx.expires_at!,
       type: "incoming",
-      invoice: "",
+      invoice: (r.invoice as string) || "",
     };
     return {
       invoice,
       clientPubkey: r.pubkey as string,
+      preimage: tx.preimage!,
+      zapRequest: (r.zap_request as string) || "",
     };
   }
 
@@ -244,7 +249,7 @@ export class DB implements IDB {
     return true;
   }
 
-  public createPayment(clientPubkey: string, invoice: Invoice) {
+  public createPayment(clientPubkey: string, invoice: NWCInvoice) {
     const insert = this.db.prepare(`
       INSERT INTO records (
         is_outgoing,
@@ -340,7 +345,7 @@ export class DB implements IDB {
     this.db.exec("COMMIT TRANSACTION");
   }
 
-  private recToTx(r: Record<string, any>): Transaction {
+  private recToTx(r: Record<string, any>): NWCTransaction {
     return {
       type: r.is_outgoing ? "outgoing" : "incoming",
       description: (r.description as string) || undefined,
@@ -355,8 +360,8 @@ export class DB implements IDB {
     };
   }
 
-  public listTransactions(req: ListTransactionsReq): {
-    transactions: Transaction[];
+  public listTransactions(req: NWCListTransactionsReq): {
+    transactions: NWCTransaction[];
   } {
     let sql = `
       SELECT * FROM records

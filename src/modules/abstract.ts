@@ -1,15 +1,29 @@
 import { Event, UnsignedEvent } from "nostr-tools";
 import {
-  Invoice,
-  ListTransactionsReq,
-  MakeInvoiceReq,
-  OnIncomingPaymentEvent,
-  PayInvoiceReq,
-  PaymentResult,
-  RouteHop,
-  Transaction,
-  WalletState,
-} from "./types";
+  NWCInvoice,
+  NWCListTransactionsReq,
+  NWCPayInvoiceReq,
+  NWCPaymentResult,
+  NWCTransaction,
+} from "./nwc-types";
+
+export interface WalletState {
+  balance: number;
+  channelSize: number;
+  feeCredit: number;
+}
+
+export interface OnIncomingPaymentEvent {
+  paymentHash: string;
+  preimage: string;
+  settledAt: number;
+  externalId?: string;
+}
+
+export interface RouteHop {
+  baseFee: number;
+  ppmFee: number;
+}
 
 export interface IFeePolicy {
   // liquidity fees:
@@ -27,17 +41,39 @@ export interface IFeePolicy {
   addMiningFeePaid(amount: number): void;
 
   // estimate before making a payment
-  estimatePaymentFeeMsat(wallet: WalletState, amount: number, route: RouteHop[]): number;
+  estimatePaymentFeeMsat(
+    wallet: WalletState,
+    amount: number,
+    route: RouteHop[]
+  ): number;
 
   // calc actual payment fee, normally should coincide with the estimate
-  calcPaymentFeeMsat(wallet: WalletState, amount: number, fees_paid: number): number;
-
+  calcPaymentFeeMsat(
+    wallet: WalletState,
+    amount: number,
+    fees_paid: number
+  ): number;
 }
 
-export interface IPhoenixd {
-  makeInvoice(id: string, req: MakeInvoiceReq): Promise<Invoice>;
-  payInvoice(req: PayInvoiceReq): Promise<PaymentResult>;
+export interface MakeInvoiceBackendReq {
+  amount: number;
+  expiry?: number;
+  description?: string;
+  descriptionHash?: string;
+  zapRequest?: string;
+}
+
+export interface IBackend {
+  makeInvoice(id: string, req: MakeInvoiceBackendReq): Promise<NWCInvoice>;
+  payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult>;
   syncPaymentsSince(fromSec: number): Promise<void>;
+}
+
+export interface InvoiceInfo {
+  clientPubkey: string;
+  invoice: NWCInvoice;
+  preimage: string;
+  zapRequest?: string;
 }
 
 export interface IDB {
@@ -50,10 +86,8 @@ export interface IDB {
 
   createInvoice(clientPubkey: string): string;
   deleteInvoice(id: string): void;
-  completeInvoice(id: string, invoice: Invoice): void;
-  getInvoiceById(
-    id: string
-  ): { invoice: Invoice; clientPubkey: string } | undefined;
+  completeInvoice(id: string, invoice: NWCInvoice, zapRequest?: string): void;
+  getInvoiceById(id: string): InvoiceInfo | undefined;
   settleInvoice(
     clientPubkey: string,
     id: string,
@@ -62,7 +96,7 @@ export interface IDB {
     miningFee: number
   ): boolean;
 
-  createPayment(clientPubkey: string, invoice: Invoice): void;
+  createPayment(clientPubkey: string, invoice: NWCInvoice): void;
   deletePayment(clientPubkey: string, paymentHash: string): void;
   settlePayment(
     clientPubkey: string,
@@ -70,20 +104,23 @@ export interface IDB {
     feesPaid: number,
     walletState: WalletState
   ): void;
-  listTransactions(req: ListTransactionsReq): {
-    transactions: Transaction[];
+  listTransactions(req: NWCListTransactionsReq): {
+    transactions: NWCTransaction[];
   };
   getLastInvoiceSettledAt(): number;
 }
 
 export interface WalletContext {
-  phoenix: IPhoenixd;
+  backend: IBackend;
   db: IDB;
   fees: IFeePolicy;
 }
 
 export type OnIncomingPayment = (p: OnIncomingPaymentEvent) => Promise<void>;
-export type OnMiningFeeEstimate = (miningFee: number, serviceFee: number) => void;
+export type OnMiningFeeEstimate = (
+  miningFee: number,
+  serviceFee: number
+) => void;
 export type OnLiquidityFee = (fee: number) => Promise<void>;
 
 export interface Signer {

@@ -2,20 +2,22 @@ import { Event, getPublicKey } from "nostr-tools";
 import { NWCServer } from "./modules/nwc";
 import { Relay } from "./modules/relay";
 import { RequestListener } from "./modules/listeners";
-import { Nip47Rep, Nip47Req, PAYMENT_FAILED } from "./modules/types";
+import { NWCReply, NWCRequest, NWC_PAYMENT_FAILED } from "./modules/nwc-types";
 import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
-import { Phoenixd } from "./modules/phoenixd";
-import { PHOENIX_PASSWORD } from "./modules/consts";
+import { Phoenix } from "./modules/phoenix";
+import { MAX_BALANCE, PHOENIX_PASSWORD } from "./modules/consts";
 import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
+import { isValidZapRequest, publishNip65Relays, publishServiceInfo, publishZapReceipt } from "./modules/nostr";
 
+let adminPubkey: string;
 const db = new DB();
-const phoenix = new Phoenixd();
+const phoenix = new Phoenix();
 const fees = new PhoenixFeePolicy();
-const wallets = new Wallets({ phoenix, db, fees });
+const wallets = new Wallets({ backend: phoenix, db, fees });
 
 // forward NWC calls to wallets
 class Server extends NWCServer {
@@ -23,17 +25,17 @@ class Server extends NWCServer {
     super(signer);
   }
 
-  protected async getBalance(req: Nip47Req, res: Nip47Rep): Promise<void> {
+  protected async getBalance(req: NWCRequest, res: NWCReply): Promise<void> {
     res.result = await wallets.getBalance(req.clientPubkey);
   }
 
-  protected async getInfo(req: Nip47Req, res: Nip47Rep): Promise<void> {
+  protected async getInfo(req: NWCRequest, res: NWCReply): Promise<void> {
     res.result = await wallets.getInfo(req.clientPubkey);
   }
 
   protected async listTransactions(
-    req: Nip47Req,
-    res: Nip47Rep
+    req: NWCRequest,
+    res: NWCReply
   ): Promise<void> {
     res.result = await wallets.listTransactions({
       ...req.params,
@@ -41,23 +43,41 @@ class Server extends NWCServer {
     });
   }
 
-  protected async makeInvoice(req: Nip47Req, res: Nip47Rep): Promise<void> {
+  protected async makeInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
     res.result = await wallets.makeInvoice({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
   }
 
-  protected async payInvoice(req: Nip47Req, res: Nip47Rep): Promise<void> {
+  protected async makeInvoiceFor(
+    req: NWCRequest,
+    res: NWCReply
+  ): Promise<void> {
+    if (!req.params.pubkey) throw new Error("Pubkey not specified");
+    if (
+      req.params.zap_request &&
+      !isValidZapRequest(req.params.zap_request, req.params.amount, adminPubkey)
+    )
+      throw new Error("Invalid zap request");
+    if (req.params.zap_request) console.log("valid zap request", req.params.zap_request);
+
+    res.result = await wallets.makeInvoiceFor({
+      ...req.params,
+      clientPubkey: req.clientPubkey,
+    });
+  }
+
+  protected async payInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
     try {
       res.result = await wallets.payInvoice({
         ...req.params,
         clientPubkey: req.clientPubkey,
       });
     } catch (e) {
-      if (e === PAYMENT_FAILED) {
+      if (e === NWC_PAYMENT_FAILED) {
         res.error = {
-          code: PAYMENT_FAILED,
+          code: NWC_PAYMENT_FAILED,
           message: "Payment failed",
         };
       } else {
@@ -71,8 +91,16 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   // new admin key on every restart
   const adminPrivkey = getSecretKey();
   const adminSigner = new PrivateKeySigner(adminPrivkey);
-  const adminPubkey = getPublicKey(adminPrivkey);
+  adminPubkey = getPublicKey(adminPrivkey);
   console.log("adminPubkey", adminPubkey);
+
+  // announce 
+  await publishNip65Relays([relayUrl], adminSigner);
+  await publishServiceInfo({
+    maxBalance: MAX_BALANCE,
+    minSendable: 1000,
+    maxSendable: MAX_BALANCE,
+  }, adminSigner);
 
   // fetch global mining fee state
   const feeState = db.getFees();
@@ -80,7 +108,17 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   fees.addMiningFeeReceived(feeState.miningFeeReceived);
 
   // load all wallets
-  wallets.start(adminPubkey);
+  wallets.start(
+    adminPubkey,
+    (zapRequest: string, bolt11: string, preimage: string) => {
+      publishZapReceipt(zapRequest, bolt11, preimage, adminSigner).catch(
+        (e) => {
+          const o = { e, zapRequest, bolt11, preimage };
+          console.error(new Date(), "failed to publish zap receipt", o);
+        }
+      );
+    }
+  );
 
   // start phoenix client and sync incoming payments
   phoenix.start({
@@ -91,7 +129,7 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
       fees.setMiningFeeEstimate(miningFee),
     onLiquidityFee: async (fee: number) => {
       fees.addMiningFeePaid(fee);
-    }
+    },
   });
 
   // list of nip47 handlers: admin + all user keys

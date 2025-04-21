@@ -1,8 +1,11 @@
-export const INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
-export const PAYMENT_FAILED = "PAYMENT_FAILED";
-export const RATE_LIMITED = "RATE_LIMITED";
+// NOTE: clientPubkey field is added to many NWC types to simplify
+// passing the client's identity
 
-export type ErrorCode =
+export const NWC_INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
+export const NWC_PAYMENT_FAILED = "PAYMENT_FAILED";
+export const NWC_RATE_LIMITED = "RATE_LIMITED";
+
+export type NWCErrorCode =
   | "INSUFFICIENT_BALANCE"
   | "RATE_LIMITED"
   | "NOT_IMPLEMENTED"
@@ -14,40 +17,36 @@ export type ErrorCode =
   | "PAYMENT_FAILED"
   | "NOT_FOUND";
 
-export type TxType = "incoming" | "outgoing";
+export type NWCTxType = "incoming" | "outgoing";
 
-// NOTE: do not rename, part of NWC
-export interface Nip47Req {
+export interface NWCRequest {
   clientPubkey: string;
   id: string;
   method: string;
   params: any;
 }
 
-// NOTE: do not rename, part of NWC
-export interface Nip47Rep {
+export interface NWCReply {
   result_type: string;
   error: null | {
-    code: ErrorCode;
+    code: NWCErrorCode;
     message: string;
   };
   result: null | any;
 }
 
-// NOTE: do not rename, part of NWC
-export interface ListTransactionsReq {
+export interface NWCListTransactionsReq {
   clientPubkey: string;
   from?: number;
   until?: number;
   limit?: number;
   offset?: number;
   unpaid?: boolean;
-  type?: TxType;
+  type?: NWCTxType;
 }
 
-// NOTE: do not rename, part of NWC
-export interface Transaction {
-  type: TxType;
+export interface NWCTransaction {
+  type: NWCTxType;
   description?: string;
   description_hash?: string;
   preimage?: string;
@@ -59,7 +58,6 @@ export interface Transaction {
   settled_at?: number;
 }
 
-// NOTE: do not rename, part of NWC
 export interface MakeInvoiceReq {
   clientPubkey: string;
   amount: number;
@@ -68,8 +66,17 @@ export interface MakeInvoiceReq {
   expiry?: number;
 }
 
-// NOTE: do not rename, part of NWC
-export interface Invoice {
+export interface NWCMakeInvoiceForReq {
+  clientPubkey: string;
+  pubkey: string;
+  amount: number;
+  description?: string;
+  description_hash?: string;
+  expiry?: number;
+  zap_request?: string;
+}
+
+export interface NWCInvoice {
   type: "incoming";
   invoice: string;
   description?: string;
@@ -80,32 +87,13 @@ export interface Invoice {
   expires_at: number;
 }
 
-// NOTE: do not rename, part of NWC
-export interface PayInvoiceReq {
+export interface NWCPayInvoiceReq {
   clientPubkey: string;
   invoice: string;
   amount?: number; // msat
 }
 
-// NOTE: do not rename, part of NWC
-export interface PaymentResult {
+export interface NWCPaymentResult {
   preimage: string;
   fees_paid?: number;
-}
-
-export interface WalletState {
-  balance: number;
-  channelSize: number;
-  feeCredit: number;
-}
-
-export interface OnIncomingPaymentEvent {
-  paymentHash: string;
-  settledAt: number;
-  externalId?: string;
-}
-
-export interface RouteHop {
-  baseFee: number;
-  ppmFee: number;
 }

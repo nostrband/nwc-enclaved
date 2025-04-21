@@ -4,20 +4,17 @@ import {
   PHOENIX_AUTO_LIQUIDITY_AMOUNT,
   PHOENIX_PORT,
 } from "./consts";
-import {
-  Invoice,
-  MakeInvoiceReq,
-  PAYMENT_FAILED,
-  PayInvoiceReq,
-  PaymentResult,
-} from "./types";
+import { NWCInvoice, NWC_PAYMENT_FAILED, NWCPayInvoiceReq, NWCPaymentResult } from "./nwc-types";
 import { now } from "./utils";
 import {
-  IPhoenixd,
+  IBackend,
+  MakeInvoiceBackendReq,
   OnIncomingPayment,
   OnLiquidityFee,
   OnMiningFeeEstimate,
 } from "./abstract";
+import { sha256 } from "@noble/hashes/sha2"; // ESM & Common.js
+import { bytesToHex } from "@noble/hashes/utils";
 
 interface PayInvoiceRequest {
   invoice: string;
@@ -52,9 +49,10 @@ interface IncomingPayment {
   receivedSat: number;
   fees: number;
   paymentHash: string;
+  preimage: string;
 }
 
-export class Phoenixd implements IPhoenixd {
+export class Phoenix implements IBackend {
   private password?: string;
   private ws?: WebSocket;
   private incomingPaymentQueue: string[] = [];
@@ -151,6 +149,7 @@ export class Phoenixd implements IPhoenixd {
       // next pass the payment
       await this.onIncomingPayment!({
         paymentHash: p.paymentHash,
+        preimage: p.preimage,
         settledAt: Math.round(p.completedAt / 1000),
         externalId: p.externalId,
       });
@@ -268,15 +267,23 @@ export class Phoenixd implements IPhoenixd {
     return res;
   }
 
-  public async makeInvoice(id: string, req: MakeInvoiceReq): Promise<Invoice> {
+  public async makeInvoice(
+    id: string,
+    req: MakeInvoiceBackendReq
+  ): Promise<NWCInvoice> {
     const expiry = req.expiry || DEFAULT_EXPIRY;
     const params: MakeInvoiceRequest = {
       amountSat: "" + Math.ceil(req.amount / 1000),
       externalId: id,
       expirySeconds: "" + expiry,
     };
-    if (req.description) params.description = req.description;
-    if (req.description_hash) params.descriptionHash = req.description_hash;
+    if (req.zapRequest) {
+      params.descriptionHash = bytesToHex(sha256(req.zapRequest));
+    } else if (req.description) {
+      params.description = req.description;
+    } else if (req.descriptionHash) {
+      params.descriptionHash = req.descriptionHash;
+    }
 
     const r = await this.call<MakeInvoiceReply>(
       "POST",
@@ -291,12 +298,12 @@ export class Phoenixd implements IPhoenixd {
       expires_at: created_at + expiry,
       invoice: r.serialized,
       payment_hash: r.paymentHash,
-      description: req.description,
-      description_hash: req.description_hash,
+      description: params.description,
+      description_hash: params.descriptionHash,
     };
   }
 
-  public async payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
+  public async payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
     const params: PayInvoiceRequest = {
       invoice: req.invoice,
     };
@@ -306,7 +313,7 @@ export class Phoenixd implements IPhoenixd {
       "POST",
       "payinvoice",
       params,
-      PAYMENT_FAILED
+      NWC_PAYMENT_FAILED
     );
     return {
       preimage: r.paymentPreimage,

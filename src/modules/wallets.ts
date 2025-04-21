@@ -1,28 +1,36 @@
-import { WalletContext } from "./abstract";
+import {
+  MakeInvoiceBackendReq,
+  OnIncomingPaymentEvent,
+  WalletContext,
+} from "./abstract";
 import { DEFAULT_EXPIRY } from "./consts";
 import {
-  INSUFFICIENT_BALANCE,
-  Invoice,
-  ListTransactionsReq,
+  NWC_INSUFFICIENT_BALANCE,
+  NWCInvoice,
+  NWCListTransactionsReq,
+  NWCMakeInvoiceForReq,
   MakeInvoiceReq,
-  OnIncomingPaymentEvent,
-  PayInvoiceReq,
-  PaymentResult,
-  Transaction,
-} from "./types";
+  NWCPayInvoiceReq,
+  NWCPaymentResult,
+  NWCTransaction,
+} from "./nwc-types";
 import { Wallet } from "./wallet";
+
+export type OnZapReceipt = (zapRequest: string, bolt11: string, preimage: string) => void;
 
 export class Wallets {
   private context: WalletContext;
   private wallets = new Map<string, Wallet>();
   private adminPubkey?: string;
+  private onZapReceipt?: OnZapReceipt;
 
   constructor(context: WalletContext) {
     this.context = context;
   }
 
-  public start(adminPubkey: string) {
+  public start(adminPubkey: string, onZapReceipt: OnZapReceipt) {
     this.adminPubkey = adminPubkey;
+    this.onZapReceipt = onZapReceipt;
 
     const wallets = this.context.db.listWallets();
     for (const w of wallets) {
@@ -36,7 +44,8 @@ export class Wallets {
       console.log(new Date(), "unknown incoming payment", payment);
       return;
     }
-    const { clientPubkey, invoice } = this.context.db.getInvoiceById(payment.externalId!) || {};
+    const { clientPubkey, invoice, zapRequest } =
+      this.context.db.getInvoiceById(payment.externalId!) || {};
     if (!clientPubkey || !invoice) {
       console.log("skip unknown invoice", payment.externalId);
       return;
@@ -47,7 +56,9 @@ export class Wallets {
       w = new Wallet(clientPubkey, this.context);
       this.wallets.set(clientPubkey, w);
     }
-    w.settleInvoice(invoice, payment);
+
+    const ok = w.settleInvoice(invoice, payment);
+    if (ok && zapRequest) this.onZapReceipt!(zapRequest, invoice.invoice, payment.preimage);
   }
 
   public getInfo(clientPubkey: string): Promise<{
@@ -66,7 +77,7 @@ export class Wallets {
       color: "000000",
       pubkey:
         "000000000000000000000000000000000000000000000000000000000000000000",
-// FIXME ask phoenix itself!
+      // FIXME ask phoenix itself!
       network: "mainnet",
       block_height: 1,
       block_hash:
@@ -93,25 +104,47 @@ export class Wallets {
         });
   }
 
-  public listTransactions(req: ListTransactionsReq): Promise<{
-    transactions: Transaction[];
+  public listTransactions(req: NWCListTransactionsReq): Promise<{
+    transactions: NWCTransaction[];
   }> {
     const w = this.wallets.get(req.clientPubkey);
     if (!w) return Promise.resolve({ transactions: [] });
     return w.listTransactions(req);
   }
 
-  public async makeInvoice(req: MakeInvoiceReq): Promise<Invoice> {
-    const id = this.context.db.createInvoice(req.clientPubkey);
+  public async makeInvoice(req: MakeInvoiceReq): Promise<NWCInvoice> {
+    return this.makeInvoiceExt(req, req.clientPubkey);
+  }
+
+  public async makeInvoiceFor(req: NWCMakeInvoiceForReq): Promise<NWCInvoice> {
+    return this.makeInvoiceExt(req, req.clientPubkey, req.zap_request);
+  }
+
+  private async makeInvoiceExt(
+    req: MakeInvoiceReq,
+    pubkey: string,
+    zapRequest?: string
+  ): Promise<NWCInvoice> {
+    if (req.amount < 1000 || (req.amount % 1000) > 0) throw new Error("Only sat payments are supported");
+
+    const id = this.context.db.createInvoice(pubkey);
     try {
-      const w = this.wallets.get(req.clientPubkey);
+      const w = this.wallets.get(pubkey);
 
       // make sure empty wallets only create short-lived
       // invoices to avoid db explosion
       if (!w) req.expiry = DEFAULT_EXPIRY;
 
-      const invoice = await this.context.phoenix.makeInvoice(id, req);
-      this.context.db.completeInvoice(id, invoice);
+      const backendReq: MakeInvoiceBackendReq = {
+        amount: req.amount,
+        description: req.description,
+        descriptionHash: req.description_hash,
+        expiry: req.expiry,
+        zapRequest,
+      };
+
+      const invoice = await this.context.backend.makeInvoice(id, backendReq);
+      this.context.db.completeInvoice(id, invoice, zapRequest);
       return invoice;
     } catch (e) {
       // cleanup on error
@@ -122,9 +155,9 @@ export class Wallets {
     }
   }
 
-  public payInvoice(req: PayInvoiceReq): Promise<PaymentResult> {
+  public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
     const w = this.wallets.get(req.clientPubkey);
-    if (!w) throw new Error(INSUFFICIENT_BALANCE);
+    if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
     return w.payInvoice(req);
   }
 }

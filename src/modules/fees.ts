@@ -5,7 +5,7 @@ import {
   PHOENIX_PAYMENT_FEE_BASE,
   PHOENIX_PAYMENT_FEE_PCT,
 } from "./consts";
-import { RouteHop, WalletState } from "./types";
+import { RouteHop, WalletState } from "./nwc-types";
 
 export class PhoenixFeePolicy implements IFeePolicy {
   private miningFeeEstimate: number = 0;
