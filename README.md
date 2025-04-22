@@ -72,6 +72,7 @@ help Bitcoin and LN get adoption as a currency.
 - [x] abuse protection: tx history size
 - [x] abuse protection: fees for holding to protect against dormant small-balance wallets
 - [x] abuse protection: fees for payments to earn revenue on non-holding wallets
+- [ ] abuse protection: GC of emptied wallets
 - [ ] privacy and security: open-source, reproducible, deployable in TEE
 - [ ] custom relay with proper DDoS protections and settings
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
@@ -167,7 +168,13 @@ so customers don't have to pre-pay for liquidity.
 Mining fees are tricky to account for because phoenix charges liquidity fees upfront from incoming payments and only when
 those charges accumulate enough to extend the channel will the mining fee amount be known. We track the total of
 mining fees paid to phoenix and adjust the `share_of_mining_fee` value that we charge our customers so that total
-fees charged approach total fees paid.
+fees charged approach total fees paid. We also take into account future mining fee estimate to pre-charge our
+customers before the next LN channel extension to avoid partial reserves situation.
+
+Another limitation with phoenix charging upfront liquidity fees is that the service operator needs to topup
+phoenix node first to create at least one channel, otherwise all initial wallets below phoenix liquidity fee
+will not be able to pay from their seemingly non-empty balance. `nwc-enclaved` will not create invoices
+until there is at least one channel created on the backend.
 
 ## Examples
 

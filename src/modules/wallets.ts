@@ -141,6 +141,11 @@ export class Wallets {
       throw new Error("Only sat payments are supported");
     if (req.amount > MAX_BALANCE) throw new Error("Max invoice size exceeded");
 
+    // make sure there is at least one channel first,
+    // service operator should topup the backend
+    const info = await this.context.backend.getInfo();
+    if (!info.channels.length) throw new Error("Service not available, no liquidity");
+
     // get target wallet
     const w = this.wallets.get(pubkey);
 
