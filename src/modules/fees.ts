@@ -1,11 +1,11 @@
-import { IFeePolicy } from "./abstract";
+import { IFeePolicy, RouteHop, WalletState } from "./abstract";
 import {
+  PAYMENT_FEE,
   PHOENIX_AUTO_LIQUIDITY_AMOUNT,
   PHOENIX_LIQUIDITY_FEE,
   PHOENIX_PAYMENT_FEE_BASE,
   PHOENIX_PAYMENT_FEE_PCT,
 } from "./consts";
-import { RouteHop, WalletState } from "./nwc-types";
 
 export class PhoenixFeePolicy implements IFeePolicy {
   private miningFeeEstimate: number = 0;
@@ -52,8 +52,11 @@ export class PhoenixFeePolicy implements IFeePolicy {
   private calcOurPaymentFee(wallet: WalletState, amount: number) {
     // we charge from fee credit this wallet has accumulated,
     // spread over wallet's **available** balance (balance - feeCredit)
-    return Math.ceil(
-      (amount * wallet.feeCredit) / (wallet.balance - wallet.feeCredit)
+    return (
+      PAYMENT_FEE +
+      Math.ceil(
+        (amount * wallet.feeCredit) / (wallet.balance - wallet.feeCredit)
+      )
     );
   }
 

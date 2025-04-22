@@ -3,7 +3,7 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { generateSecretKey } from "nostr-tools";
 
 export function getSecretKey() {
-  const FILE = "./.admin.sk";
+  const FILE = "./.service.sk";
   if (fs.existsSync(FILE)) {
     const hex = fs.readFileSync(FILE).toString("utf8");
     const privkey = Buffer.from(hex, "hex");

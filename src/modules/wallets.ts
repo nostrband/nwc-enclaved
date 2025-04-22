@@ -33,16 +33,16 @@ export type OnZapReceipt = (
 export class Wallets {
   private context: WalletContext;
   private wallets = new Map<string, Wallet>();
-  private adminPubkey?: string;
+  private servicePubkey?: string;
   private onZapReceipt?: OnZapReceipt;
 
   constructor(context: WalletContext) {
     this.context = context;
   }
 
-  public start(adminPubkey: string, onZapReceipt: OnZapReceipt) {
-    this.adminPubkey = adminPubkey;
-    this.onZapReceipt = onZapReceipt;
+  public start(opts: { servicePubkey: string, onZapReceipt: OnZapReceipt }) {
+    this.servicePubkey = opts.servicePubkey;
+    this.onZapReceipt = opts.onZapReceipt;
 
     const wallets = this.context.db.listWallets();
     for (const w of wallets) {
@@ -84,10 +84,10 @@ export class Wallets {
     methods: string[];
     notifications: string[];
   }> {
-    if (!this.adminPubkey) throw new Error("No admin pubkey");
+    if (!this.servicePubkey) throw new Error("No service pubkey");
     const info = await this.context.backend.getInfo();
     return {
-      alias: this.adminPubkey,
+      alias: this.servicePubkey,
       color: "000000",
       pubkey: info.nodeId,
       network: info.chain,
@@ -195,5 +195,11 @@ export class Wallets {
     const w = this.wallets.get(req.clientPubkey);
     if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
     return w.payInvoice(req);
+  }
+
+  public chargeWalletFee(pubkey: string) {
+    const w = this.wallets.get(pubkey);
+    if (!w) throw new Error("Failed to find wallet for payment fee");
+    w.chargeWalletFee();
   }
 }

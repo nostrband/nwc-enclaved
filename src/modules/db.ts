@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { DB_PATH } from "./consts";
+import { DB_PATH, PAYMENT_FEE, WALLET_FEE, WALLET_FEE_PERIOD } from "./consts";
 import {
   NWCInvoice,
   NWCListTransactionsReq,
@@ -39,14 +39,18 @@ export class DB implements IDB {
         pubkey TEXT,
         balance INTEGER DEFAULT 0,
         channel_size INTEGER DEFAULT 0,
-        fee_credit INTEGER DEFAULT 0
+        fee_credit INTEGER DEFAULT 0,
+        created_at INTEGER,
+        next_wallet_fee_at INTEGER
       )
     `);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS fees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         mining_fee_paid INTEGER DEFAULT 0,
-        mining_fee_received INTEGER DEFAULT 0
+        mining_fee_received INTEGER DEFAULT 0,
+        wallet_fee_received INTEGER DEFAULT 0,
+        payment_fee_received INTEGER DEFAULT 0
       )
     `);
     this.db.exec(`
@@ -72,6 +76,10 @@ export class DB implements IDB {
     this.db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS wallets_pubkey_index 
       ON wallets (pubkey)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS wallets_next_wallet_fee_at_index
+      ON wallets (next_wallet_fee_at)
     `);
   }
 
@@ -100,6 +108,93 @@ export class DB implements IDB {
       miningFeePaid: (rec?.mining_fee_paid as number) || 0,
       miningFeeReceived: (rec?.mining_fee_received as number) || 0,
     };
+  }
+
+  public getNextWalletFeePubkey(): string | undefined {
+    const select = this.db.prepare(`
+      SELECT pubkey FROM wallets
+      WHERE
+        balance > fee_credit
+      AND
+        next_wallet_fee_at < ?
+      ORDER BY next_wallet_fee_at ASC
+      LIMIT 1
+    `);
+    const rec = select.get(now());
+    return rec?.pubkey as string;
+  }
+
+  public chargeWalletFee(pubkey: string) {
+    console.log(new Date(), "db charging wallet fee on", pubkey);
+    const tm = now();
+    this.db.exec("BEGIN TRANSACTION");
+    try {
+      const payment = this.db.prepare(`
+        INSERT INTO records (
+          pubkey,
+          is_outgoing,
+          is_paid,
+          description,
+          amount,
+          created_at,
+          settled_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      const pr = payment.run(pubkey, 1, 1, "wallet fee", WALLET_FEE, tm, tm);
+      if (!pr.changes) throw new Error("Failed to charge wallet fee");
+
+      const wallet = this.db.prepare(`
+        UPDATE wallets
+        SET
+          balance = balance - ?,
+          next_wallet_fee_at = next_wallet_fee_at + ?
+        WHERE
+          pubkey = ?
+      `);
+      const wr = wallet.run(WALLET_FEE, WALLET_FEE_PERIOD);
+      if (!wr.changes) throw new Error("Failed to update wallet fee balance");
+
+      const fee = this.db.prepare(`
+        UPDATE fees
+        SET wallet_fee_received = wallet_fee_received + ?
+        WHERE id = 1
+      `);
+      const fr = fee.run(WALLET_FEE);
+      if (!fr.changes) throw new Error("Failed to add wallet fee");
+    } catch (e) {
+      this.db.exec("ROLLBACK TRANSACTION");
+      throw e;
+    }
+    this.db.exec("COMMIT TRANSACTION");
+  }
+
+  public clearExpiredInvoices() {
+    const del = this.db.prepare(`
+      DELETE FROM records
+      WHERE
+        is_outgoing = 0
+      AND
+        is_paid = 0
+      AND
+        expires_at < ?
+    `);
+    const r = del.run(now());
+    console.log(new Date(), "db clear expired invoices deleted", r.changes);
+  }
+
+  public clearOldTxs(until: number) {
+    const del = this.db.prepare(`
+      DELETE FROM records
+      WHERE created_at < ?
+    `);
+    const r = del.run(until);
+    console.log(
+      new Date(),
+      "db clear old txs until",
+      until,
+      "deleted",
+      r.changes
+    );
   }
 
   public listWallets(): {
@@ -198,18 +293,23 @@ export class DB implements IDB {
     if (r.changes !== 1) throw new Error("Invoice not found by id");
   }
 
-  public getInvoiceInfo({ id, paymentHash }: {
+  public getInvoiceInfo({
+    id,
+    paymentHash,
+  }: {
     id?: string;
     paymentHash?: string;
   }): InvoiceInfo | undefined {
     if (!id && !paymentHash) throw new Error("Specify id or payment hash");
-    const sql = id ? `
+    const sql = id
+      ? `
       SELECT * FROM records
       WHERE
         id = ?
       AND
         is_outgoing = 0
-    ` : `
+    `
+      : `
       SELECT * FROM records
       WHERE
         payment_hash = ?
@@ -246,7 +346,8 @@ export class DB implements IDB {
     this.db.exec("BEGIN TRANSACTION");
 
     try {
-      const { clientPubkey: expectedPubkey } = this.getInvoiceInfo({ id }) || {};
+      const { clientPubkey: expectedPubkey } =
+        this.getInvoiceInfo({ id }) || {};
       if (expectedPubkey !== clientPubkey)
         throw new Error("Invalid clientPubkey for settleInvoice");
 
@@ -329,19 +430,22 @@ export class DB implements IDB {
   private updateWalletState(clientPubkey: string, walletState: WalletState) {
     // update wallet
     const wallet = this.db.prepare(`
-      INSERT INTO wallets (pubkey, balance, channel_size, fee_credit) 
-      VALUES (?, ?, ?, ?)
+      INSERT INTO wallets (pubkey, balance, channel_size, fee_credit, created_at, next_wallet_fee_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(pubkey) DO UPDATE 
       SET
         balance = ?,
         channel_size = ?,
         fee_credit = ?
     `);
+    const tm = now();
     const wr = wallet.run(
       clientPubkey,
       walletState.balance,
       walletState.channelSize,
       walletState.feeCredit,
+      tm,
+      tm + WALLET_FEE_PERIOD,
       walletState.balance,
       walletState.channelSize,
       walletState.feeCredit
@@ -377,6 +481,14 @@ export class DB implements IDB {
 
       // update wallet
       this.updateWalletState(clientPubkey, walletState);
+
+      const fee = this.db.prepare(`
+        UPDATE fees
+        SET payment_fee_received = payment_fee_received + ?
+        WHERE id = 1
+      `);
+      const fr = fee.run(PAYMENT_FEE);
+      if (!fr.changes) throw new Error("Failed to add payment fee");
     } catch (e) {
       console.error(new Date(), "tx failed", e);
 

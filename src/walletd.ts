@@ -7,13 +7,19 @@ import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
-import { MAX_BALANCE, PHOENIX_PASSWORD } from "./modules/consts";
+import { MAX_BALANCE, MAX_TX_AGE, PHOENIX_PASSWORD } from "./modules/consts";
 import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
-import { isValidZapRequest, publishNip65Relays, publishServiceInfo, publishZapReceipt } from "./modules/nostr";
+import {
+  isValidZapRequest,
+  publishNip65Relays,
+  publishServiceInfo,
+  publishZapReceipt,
+} from "./modules/nostr";
+import { now } from "./modules/utils";
 
-let adminPubkey: string;
+let servicePubkey: string;
 const db = new DB();
 const phoenix = new Phoenix();
 const fees = new PhoenixFeePolicy();
@@ -57,10 +63,15 @@ class Server extends NWCServer {
     if (!req.params.pubkey) throw new Error("Pubkey not specified");
     if (
       req.params.zap_request &&
-      !isValidZapRequest(req.params.zap_request, req.params.amount, adminPubkey)
+      !isValidZapRequest(
+        req.params.zap_request,
+        req.params.amount,
+        servicePubkey
+      )
     )
       throw new Error("Invalid zap request");
-    if (req.params.zap_request) console.log("valid zap request", req.params.zap_request);
+    if (req.params.zap_request)
+      console.log("valid zap request", req.params.zap_request);
 
     res.result = await wallets.makeInvoiceFor({
       ...req.params,
@@ -87,20 +98,35 @@ class Server extends NWCServer {
   }
 }
 
-export async function startWalletd({ relayUrl }: { relayUrl: string }) {
-  // new admin key on every restart
-  const adminPrivkey = getSecretKey();
-  const adminSigner = new PrivateKeySigner(adminPrivkey);
-  adminPubkey = getPublicKey(adminPrivkey);
-  console.log("adminPubkey", adminPubkey);
+async function GC() {
+  setInterval(() => {
+    db.clearOldTxs(now() - MAX_TX_AGE);
+    db.clearExpiredInvoices();
+  }, 60000);
 
-  // announce 
-  await publishNip65Relays([relayUrl], adminSigner);
-  await publishServiceInfo({
-    maxBalance: MAX_BALANCE,
-    minSendable: 1000,
-    maxSendable: MAX_BALANCE,
-  }, adminSigner);
+  setInterval(() => {
+    const pubkey = db.getNextWalletFeePubkey();
+    if (pubkey) wallets.chargeWalletFee(pubkey);
+  }, 1000);
+}
+
+export async function startWalletd({ relayUrl }: { relayUrl: string }) {
+  // read or create our key
+  const servicePrivkey = getSecretKey();
+  const serviceSigner = new PrivateKeySigner(servicePrivkey);
+  servicePubkey = getPublicKey(servicePrivkey);
+  console.log("servicePubkey", servicePubkey);
+
+  // announce
+  await publishNip65Relays([relayUrl], serviceSigner);
+  await publishServiceInfo(
+    {
+      maxBalance: MAX_BALANCE,
+      minSendable: 1000,
+      maxSendable: MAX_BALANCE,
+    },
+    serviceSigner
+  );
 
   // fetch global mining fee state
   const feeState = db.getFees();
@@ -108,17 +134,17 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   fees.addMiningFeeReceived(feeState.miningFeeReceived);
 
   // load all wallets
-  wallets.start(
-    adminPubkey,
-    (zapRequest: string, bolt11: string, preimage: string) => {
-      publishZapReceipt(zapRequest, bolt11, preimage, adminSigner).catch(
+  wallets.start({
+    servicePubkey,
+    onZapReceipt: (zapRequest: string, bolt11: string, preimage: string) => {
+      publishZapReceipt(zapRequest, bolt11, preimage, serviceSigner).catch(
         (e) => {
           const o = { e, zapRequest, bolt11, preimage };
           console.error(new Date(), "failed to publish zap receipt", o);
         }
       );
-    }
-  );
+    },
+  });
 
   // start phoenix client and sync incoming payments
   phoenix.start({
@@ -132,8 +158,8 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
     },
   });
 
-  // list of nip47 handlers: admin + all user keys
-  const server = new Server(adminSigner);
+  // NWC server
+  const server = new Server(serviceSigner);
 
   // request handler
   const process = async (e: Event, relay: Relay) => {
@@ -155,6 +181,9 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
     },
   });
 
-  // single admin on a single relay for now
-  requestListener.addPubkey(adminPubkey, [relayUrl]);
+  // listen to requests targeting our pubkey
+  requestListener.addPubkey(servicePubkey, [relayUrl]);
+
+  // clear old txs, empty wallets, unpaid expired invoices etc
+  GC();
 }

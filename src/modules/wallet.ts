@@ -15,7 +15,7 @@ import {
   WalletContext,
   WalletState,
 } from "./abstract";
-import { MAX_CONCURRENT_PAYMENTS_PER_WALLET } from "./consts";
+import { MAX_CONCURRENT_PAYMENTS_PER_WALLET, WALLET_FEE } from "./consts";
 
 export class Wallet {
   private context: WalletContext;
@@ -311,5 +311,13 @@ export class Wallet {
       // forward it
       throw e;
     }
+  }
+
+  public chargeWalletFee() {
+    this.context.db.chargeWalletFee(this.pubkey);
+    this.state = {
+      ...this.state,
+      balance: this.state.balance - WALLET_FEE,
+    };
   }
 }

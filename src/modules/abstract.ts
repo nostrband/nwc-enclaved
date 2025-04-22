@@ -93,13 +93,15 @@ export interface InvoiceInfo {
 
 export interface IDB {
   getFees(): { miningFeeReceived: number; miningFeePaid: number };
-
   listWallets(): {
     pubkey: string;
     state: WalletState;
   }[];
-
-  countUnpaidInvoices(): { anons: number, wallets: number };
+  clearOldTxs(until: number): void;
+  clearExpiredInvoices(): void;
+  getNextWalletFeePubkey(): string | undefined;
+  chargeWalletFee(pubkey: string): void;
+  countUnpaidInvoices(): { anons: number; wallets: number };
   createInvoice(clientPubkey: string): string;
   deleteInvoice(id: string): void;
   completeInvoice(
@@ -108,7 +110,10 @@ export interface IDB {
     zapRequest?: string,
     anon?: boolean
   ): void;
-  getInvoiceInfo(opt: { id?: string, paymentHash?: string }): InvoiceInfo | undefined;
+  getInvoiceInfo(opt: {
+    id?: string;
+    paymentHash?: string;
+  }): InvoiceInfo | undefined;
   settleInvoice(
     clientPubkey: string,
     id: string,
@@ -116,7 +121,6 @@ export interface IDB {
     walletState: WalletState,
     miningFee: number
   ): boolean;
-
   createPayment(clientPubkey: string, invoice: NWCInvoice): void;
   deletePayment(clientPubkey: string, paymentHash: string): void;
   settlePayment(

@@ -69,8 +69,9 @@ help Bitcoin and LN get adoption as a currency.
 - [x] custom LNURL server to provide zappable addresses to any npub
 - [x] abuse protection: zero overhead for empty unused wallets
 - [x] abuse protection: limits on number of wallets, unpaid invoices, balance and payment amounts
-- [ ] abuse protection: fees for holding to protect against dormant small-balance wallets
-- [ ] abuse protection: tx history size
+- [x] abuse protection: tx history size
+- [x] abuse protection: fees for holding to protect against dormant small-balance wallets
+- [x] abuse protection: fees for payments to earn revenue on non-holding wallets
 - [ ] privacy and security: open-source, reproducible, deployable in TEE
 - [ ] custom relay with proper DDoS protections and settings
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM

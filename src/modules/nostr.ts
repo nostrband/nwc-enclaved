@@ -107,7 +107,7 @@ export async function fetchPubkeyRelays(pubkey: string) {
 export async function isValidZapRequest(
   zapRequest: string,
   amount: number,
-  adminPubkey: string
+  servicePubkey: string
 ) {
   try {
     const req: Event = JSON.parse(zapRequest);
@@ -158,7 +158,7 @@ export async function isValidZapRequest(
     const Ps = req.tags
       .filter((t) => t.length > 1 && t[0] === "P" && t[1].length === 64)
       .map((t) => t[1]);
-    if (Ps.length > 1 || (Ps.length === 1 && Ps[0] !== adminPubkey))
+    if (Ps.length > 1 || (Ps.length === 1 && Ps[0] !== servicePubkey))
       return false;
 
     return true;
