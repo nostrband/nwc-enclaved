@@ -63,7 +63,22 @@ export interface MakeInvoiceBackendReq {
   zapRequest?: string;
 }
 
+export interface BackendInfo {
+  nodeId: string;
+  chain: string;
+  blockHeight: number;
+  channels: {
+    state: string;
+    channelId: string;
+    balance: number;
+    inboundLiquidity: number;
+    capacity: number;
+    fundingTxId: string;
+  }[];
+}
+
 export interface IBackend {
+  getInfo(): Promise<BackendInfo>;
   makeInvoice(id: string, req: MakeInvoiceBackendReq): Promise<NWCInvoice>;
   payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult>;
   syncPaymentsSince(fromSec: number): Promise<void>;
@@ -84,10 +99,16 @@ export interface IDB {
     state: WalletState;
   }[];
 
+  countUnpaidInvoices(): { anons: number, wallets: number };
   createInvoice(clientPubkey: string): string;
   deleteInvoice(id: string): void;
-  completeInvoice(id: string, invoice: NWCInvoice, zapRequest?: string): void;
-  getInvoiceById(id: string): InvoiceInfo | undefined;
+  completeInvoice(
+    id: string,
+    invoice: NWCInvoice,
+    zapRequest?: string,
+    anon?: boolean
+  ): void;
+  getInvoiceInfo(opt: { id?: string, paymentHash?: string }): InvoiceInfo | undefined;
   settleInvoice(
     clientPubkey: string,
     id: string,

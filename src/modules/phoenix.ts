@@ -1,12 +1,18 @@
 import { MessageEvent, WebSocket } from "ws";
 import {
-  DEFAULT_EXPIRY,
+  MAX_ANON_INVOICE_EXPIRY,
   PHOENIX_AUTO_LIQUIDITY_AMOUNT,
   PHOENIX_PORT,
 } from "./consts";
-import { NWCInvoice, NWC_PAYMENT_FAILED, NWCPayInvoiceReq, NWCPaymentResult } from "./nwc-types";
+import {
+  NWCInvoice,
+  NWC_PAYMENT_FAILED,
+  NWCPayInvoiceReq,
+  NWCPaymentResult,
+} from "./nwc-types";
 import { now } from "./utils";
 import {
+  BackendInfo,
   IBackend,
   MakeInvoiceBackendReq,
   OnIncomingPayment,
@@ -55,6 +61,7 @@ interface IncomingPayment {
 export class Phoenix implements IBackend {
   private password?: string;
   private ws?: WebSocket;
+  private info?: BackendInfo;
   private incomingPaymentQueue: string[] = [];
   private onOpen?: () => void;
   private onIncomingPayment?: OnIncomingPayment;
@@ -113,8 +120,10 @@ export class Phoenix implements IBackend {
         Authorization: this.getAuth(),
       },
     });
-    this.ws.onopen = () => {
+    this.ws.onopen = async () => {
       console.log(new Date(), "phoenixd websocket connected");
+      this.info = await this.getBackendInfo();
+      console.log(new Date(), "phoenixd info", this.info);
       this.onOpen!();
     };
     this.ws.onclose = async () => {
@@ -267,11 +276,20 @@ export class Phoenix implements IBackend {
     return res;
   }
 
+  private async getBackendInfo() {
+    return this.call<BackendInfo>("GET", "getinfo", {});
+  }
+
+  public getInfo(): Promise<BackendInfo> {
+    if (this.info) return Promise.resolve(this.info);
+    else return this.getBackendInfo();
+  }
+
   public async makeInvoice(
     id: string,
     req: MakeInvoiceBackendReq
   ): Promise<NWCInvoice> {
-    const expiry = req.expiry || DEFAULT_EXPIRY;
+    const expiry = req.expiry || MAX_ANON_INVOICE_EXPIRY;
     const params: MakeInvoiceRequest = {
       amountSat: "" + Math.ceil(req.amount / 1000),
       externalId: id,

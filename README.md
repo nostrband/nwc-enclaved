@@ -67,15 +67,16 @@ help Bitcoin and LN get adoption as a currency.
 - [x] automatic liquidity management
 - [x] service instance announcement published as Nostr event
 - [x] custom LNURL server to provide zappable addresses to any npub
-- [ ] internal payments without LN routing fees
 - [x] abuse protection: zero overhead for empty unused wallets
+- [x] abuse protection: limits on number of wallets, unpaid invoices, balance and payment amounts
 - [ ] abuse protection: fees for holding to protect against dormant small-balance wallets
-- [ ] abuse protection: small fee for internal payments
-- [ ] abuse protection: limits on number of wallets, tx history size, unpaid invoices, balance and payment amounts
+- [ ] abuse protection: tx history size
 - [ ] privacy and security: open-source, reproducible, deployable in TEE
 - [ ] custom relay with proper DDoS protections and settings
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
 - [ ] telemetry for transparency
+- [ ] internal payments without LN routing fees (LATER)
+- [ ] abuse protection: small fee for internal payments
 
 ## Non-goals
 
@@ -100,22 +101,23 @@ backends.
 
 ## Wallet creation
 
-NWC spec specifies that wallets should generate a client key and return it to apps in the form of NWC 
+NWC spec specifies that wallets should generate a client key and return it to apps in the form of NWC
 connection string - this is a prescribed wallet creation step, usually executed manually by users by scanning
 a QR-code. `nwc-enclaved` allows clients to generate NWC keys themselves and accepts NWC queries from any key.
-In other words, any NWC method can be called by any `npub` without any additional connection/signup step. 
+In other words, any NWC method can be called by any `npub` without any additional connection/signup step.
 Actual wallet state is created only when an invoice is paid and `npub` gets a non-zero balance. This basically
 means that if you generated a nostr pubkey and discovered an `nwc-enclaved` instance - you have a wallet.
 
 ## LUD-16 address and Zaps
 
-NWC doesn't define a method for third-parties to create invoices (`make_invoice` can only be called by wallet owner), 
-we are introducing a new method `make_invoice_for` that acts like `make_invoice` but a) **can be called by any 
-pubkey** (i.e. throwaway pubkey), and b) has two additional parameters: 
+NWC doesn't define a method for third-parties to create invoices (`make_invoice` can only be called by wallet owner),
+we are introducing a new method `make_invoice_for` that acts like `make_invoice` but a) **can be called by any
+pubkey** (i.e. throwaway pubkey), and b) has two additional parameters:
+
 - `pubkey` - required, target pubkey whose wallet will be receiving the sats
 - `zap_request` - optional, stringified NIP57 zap-request (`kind:9734`) event for zaps
 
-To provide users with LUD-16 lightning address, the address provider must figure out how to translate `<username>@<domain>` 
+To provide users with LUD-16 lightning address, the address provider must figure out how to translate `<username>@<domain>`
 to `service pubkey` and `user pubkey`. Specifics are up to providers, one approach that we're
 using with our `zap.land` LUD-16 provider (see `lnaddr.ts`) is to use `<user-npub>@<service-npub>.zap.land` as address.
 An app can choose an `nwc-enclaved` service instance, get it's pubkey (`service pubkey`) and put
@@ -124,7 +126,7 @@ the user is ready to accept LN payments and zaps.
 
 ## Service announcement event
 
-`nwc-enclaved` will publish a NIP-65 `kind:10002` event listing the relays it's using for NWC, and an announcement 
+`nwc-enclaved` will publish a NIP-65 `kind:10002` event listing the relays it's using for NWC, and an announcement
 event of `kind:13195` to enable discovery and to inform clients about fees and other metadata:
 
 ```
@@ -140,6 +142,15 @@ event of `kind:13195` to enable discovery and to inform clients about fees and o
   ]
 }
 ```
+
+## Examples
+
+TBD:
+
+- Getting an invoice for your wallet.
+- Getting LUD16 address for nostr profile.
+- Sending a zap.
+- Managing your wallet.
 
 ## TODO
 

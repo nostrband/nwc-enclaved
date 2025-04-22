@@ -3,7 +3,14 @@ import {
   OnIncomingPaymentEvent,
   WalletContext,
 } from "./abstract";
-import { DEFAULT_EXPIRY } from "./consts";
+import {
+  MAX_ANON_INVOICES,
+  MAX_ANON_INVOICE_EXPIRY,
+  MAX_BALANCE,
+  MAX_INVOICES,
+  MAX_INVOICE_EXPIRY,
+  MAX_WALLETS,
+} from "./consts";
 import {
   NWC_INSUFFICIENT_BALANCE,
   NWCInvoice,
@@ -13,10 +20,15 @@ import {
   NWCPayInvoiceReq,
   NWCPaymentResult,
   NWCTransaction,
+  NWC_RATE_LIMITED,
 } from "./nwc-types";
 import { Wallet } from "./wallet";
 
-export type OnZapReceipt = (zapRequest: string, bolt11: string, preimage: string) => void;
+export type OnZapReceipt = (
+  zapRequest: string,
+  bolt11: string,
+  preimage: string
+) => void;
 
 export class Wallets {
   private context: WalletContext;
@@ -45,7 +57,7 @@ export class Wallets {
       return;
     }
     const { clientPubkey, invoice, zapRequest } =
-      this.context.db.getInvoiceById(payment.externalId!) || {};
+      this.context.db.getInvoiceInfo({ id: payment.externalId! }) || {};
     if (!clientPubkey || !invoice) {
       console.log("skip unknown invoice", payment.externalId);
       return;
@@ -58,30 +70,30 @@ export class Wallets {
     }
 
     const ok = w.settleInvoice(invoice, payment);
-    if (ok && zapRequest) this.onZapReceipt!(zapRequest, invoice.invoice, payment.preimage);
+    if (ok && zapRequest)
+      this.onZapReceipt!(zapRequest, invoice.invoice, payment.preimage);
   }
 
-  public getInfo(clientPubkey: string): Promise<{
+  public async getInfo(clientPubkey: string): Promise<{
     alias: string;
     color: string;
     pubkey: string;
     network: string;
     block_height: number;
-    block_hash: string;
+    // block_hash: string;
     methods: string[];
     notifications: string[];
   }> {
     if (!this.adminPubkey) throw new Error("No admin pubkey");
-    return Promise.resolve({
+    const info = await this.context.backend.getInfo();
+    return {
       alias: this.adminPubkey,
       color: "000000",
-      pubkey:
-        "000000000000000000000000000000000000000000000000000000000000000000",
-      // FIXME ask phoenix itself!
-      network: "mainnet",
-      block_height: 1,
-      block_hash:
-        "000000000000000000000000000000000000000000000000000000000000000000",
+      pubkey: info.nodeId,
+      network: info.chain,
+      block_height: info.blockHeight,
+      // block_hash:
+      //   "000000000000000000000000000000000000000000000000000000000000000000",
       methods: [
         "pay_invoice",
         "get_balance",
@@ -90,7 +102,7 @@ export class Wallets {
         "get_info",
       ],
       notifications: [], // "payment_received", "payment_sent"
-    });
+    };
   }
 
   public getBalance(clientPubkey: string): Promise<{
@@ -125,16 +137,36 @@ export class Wallets {
     pubkey: string,
     zapRequest?: string
   ): Promise<NWCInvoice> {
-    if (req.amount < 1000 || (req.amount % 1000) > 0) throw new Error("Only sat payments are supported");
+    if (req.amount < 1000 || req.amount % 1000 > 0)
+      throw new Error("Only sat payments are supported");
+    if (req.amount > MAX_BALANCE) throw new Error("Max invoice size exceeded");
+
+    // get target wallet
+    const w = this.wallets.get(pubkey);
+
+    // limit the number of wallets
+    if (!w && this.wallets.size >= MAX_WALLETS)
+      throw new Error("No new wallets allowed");
+
+    // limit total balance
+    if (w && w.getState().balance + req.amount > MAX_BALANCE)
+      throw new Error("Wallet balance would exceed max balance");
+
+    // max unpaid invoices
+    const counts = this.context.db.countUnpaidInvoices();
+    if (counts.anons >= (w ? MAX_INVOICES : MAX_ANON_INVOICES))
+      throw new Error(NWC_RATE_LIMITED);
 
     const id = this.context.db.createInvoice(pubkey);
     try {
-      const w = this.wallets.get(pubkey);
-
       // make sure empty wallets only create short-lived
       // invoices to avoid db explosion
-      if (!w) req.expiry = DEFAULT_EXPIRY;
+      req.expiry = Math.min(
+        req.expiry || MAX_ANON_INVOICE_EXPIRY, // default
+        w ? MAX_INVOICE_EXPIRY : MAX_ANON_INVOICE_EXPIRY // max
+      );
 
+      // backend req
       const backendReq: MakeInvoiceBackendReq = {
         amount: req.amount,
         description: req.description,
@@ -143,8 +175,12 @@ export class Wallets {
         zapRequest,
       };
 
+      // create invoice on the backend
       const invoice = await this.context.backend.makeInvoice(id, backendReq);
-      this.context.db.completeInvoice(id, invoice, zapRequest);
+
+      // commit to db
+      const anon = !w;
+      this.context.db.completeInvoice(id, invoice, zapRequest, anon);
       return invoice;
     } catch (e) {
       // cleanup on error

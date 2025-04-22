@@ -29,7 +29,8 @@ export class DB implements IDB {
         expires_at INTEGER DEFAULT 0,
         settled_at INTEGER DEFAULT 0,
         zap_request TEXT DEFAULT '',
-        invoice TEXT DEFAULT ''
+        invoice TEXT DEFAULT '',
+        anon INTEGER DEFAULT 0
       )
     `);
     this.db.exec(`
@@ -119,6 +120,27 @@ export class DB implements IDB {
     }));
   }
 
+  public countUnpaidInvoices(): { anons: number; wallets: number } {
+    const count = (anon: boolean) => {
+      const select = this.db.prepare(`
+        SELECT COUNT(id) as cnt
+        FROM records
+        WHERE
+          is_outgoing = 0
+        AND
+          is_paid = 0
+        AND
+          anon = ?
+      `);
+      const r = select.get(anon ? 1 : 0);
+      return r!.cnt as number;
+    };
+    return {
+      anons: count(true),
+      wallets: count(false),
+    };
+  }
+
   public createInvoice(clientPubkey: string) {
     const insert = this.db.prepare(`
       INSERT INTO records (
@@ -141,7 +163,12 @@ export class DB implements IDB {
     del.run(id);
   }
 
-  public completeInvoice(id: string, invoice: NWCInvoice, zapRequest?: string) {
+  public completeInvoice(
+    id: string,
+    invoice: NWCInvoice,
+    zapRequest?: string,
+    anon?: boolean
+  ) {
     const update = this.db.prepare(`
       UPDATE records
       SET
@@ -152,7 +179,8 @@ export class DB implements IDB {
         created_at = ?,
         expires_at = ?,
         zap_request = ?,
-        invoice = ?
+        invoice = ?,
+        anon = ?
       WHERE id = ?
     `);
     const r = update.run(
@@ -164,16 +192,32 @@ export class DB implements IDB {
       invoice.expires_at,
       zapRequest || "",
       invoice.invoice,
+      anon ? 1 : 0,
       id
     );
     if (r.changes !== 1) throw new Error("Invoice not found by id");
   }
 
-  public getInvoiceById(id: string): InvoiceInfo | undefined {
-    const select = this.db.prepare(
-      `SELECT * FROM records WHERE id = ? AND is_outgoing = 0`
-    );
-    const r = select.get(id);
+  public getInvoiceInfo({ id, paymentHash }: {
+    id?: string;
+    paymentHash?: string;
+  }): InvoiceInfo | undefined {
+    if (!id && !paymentHash) throw new Error("Specify id or payment hash");
+    const sql = id ? `
+      SELECT * FROM records
+      WHERE
+        id = ?
+      AND
+        is_outgoing = 0
+    ` : `
+      SELECT * FROM records
+      WHERE
+        payment_hash = ?
+      AND
+        is_outgoing = 0
+    `;
+    const select = this.db.prepare(sql);
+    const r = select.get(id ? id : paymentHash!);
     if (!r) return undefined;
     const tx = this.recToTx(r);
     if (tx.type === "outgoing") throw new Error("Invalid type");
@@ -202,7 +246,7 @@ export class DB implements IDB {
     this.db.exec("BEGIN TRANSACTION");
 
     try {
-      const { clientPubkey: expectedPubkey } = this.getInvoiceById(id) || {};
+      const { clientPubkey: expectedPubkey } = this.getInvoiceInfo({ id }) || {};
       if (expectedPubkey !== clientPubkey)
         throw new Error("Invalid clientPubkey for settleInvoice");
 

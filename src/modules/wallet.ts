@@ -15,7 +15,7 @@ import {
   WalletContext,
   WalletState,
 } from "./abstract";
-import { MAX_CONCURRENT_PAYMENTS } from "./consts";
+import { MAX_CONCURRENT_PAYMENTS_PER_WALLET } from "./consts";
 
 export class Wallet {
   private context: WalletContext;
@@ -31,6 +31,10 @@ export class Wallet {
       channelSize: 0,
       feeCredit: 0,
     };
+  }
+
+  public getState(): WalletState {
+    return this.state;
   }
 
   public clientPubkey() {
@@ -164,6 +168,7 @@ export class Wallet {
       invoice,
       preimage,
       route,
+      nodeId: decoded.payeeNodeKey,
     };
   }
 
@@ -175,11 +180,11 @@ export class Wallet {
   public async payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
-    if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS)
+    if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS_PER_WALLET)
       throw new Error(NWC_RATE_LIMITED);
 
     // parse bolt11 string
-    const { invoice, preimage, route } = this.parseBolt11(
+    const { invoice, preimage, route, nodeId } = this.parseBolt11(
       req.invoice,
       req.amount
     );
@@ -192,6 +197,19 @@ export class Wallet {
     // already paying this?
     if (this.pendingPayments.has(invoice.payment_hash))
       throw new Error(NWC_PAYMENT_FAILED);
+
+    // NOTE: we're not handling internal payments yet bcs
+    // phoenixd doesn't let us destroy an unpaid invoice,
+    // which means we could accept internal payment and
+    // external payment on the same invoice and there's
+    // no way to prevent that from happening. Leave it
+    // for later.
+
+    // is it internal payment?
+    // const info = await this.context.backend.getInfo();
+    // if (info.nodeId === nodeId) {
+
+    // }
 
     // check if client has enough balance,
     // take the prescribed route into account to make sure
