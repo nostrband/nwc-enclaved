@@ -144,6 +144,31 @@ event of `kind:13195` to enable discovery and to inform clients about fees and o
 }
 ```
 
+## Fees
+
+To protect against abuse and to make sure the service earns revenue from usage, two kinds of fees are introduced:
+
+- `wallet fee`: 1 sat charged on non-empty wallets every 24 hours
+- `payment fee`: 1 sat charged on every payment (in addition to other fees)
+
+Additional payment fees are charged by phoenix at the rate of 4 sats + 0.4% per payment (percentage fee not charged if it's
+less than 1 sat).
+
+Liquidity fees are paid by the service on LN channel extension at the rate of 1% of channel amount + mining fees. We are relaying
+these fees on customer wallets according to this logic:
+
+- each wallet gets a single _virtual channel_ which is extended whenever wallet balance exceeds channel size
+- each wallet channel extension results in `fee_credit` of 1% + `share_of_mining_fee` accumulating on the wallet state
+- when wallet makes a payment, a share of wallet's `fee_credit` is charged as an additional payment fee
+
+This way liquidity fees are only charged on customers extending their balance and are spread over outgoing payments
+so customers don't have to pre-pay for liquidity.
+
+Mining fees are tricky to account for because phoenix charges liquidity fees upfront from incoming payments and only when
+those charges accumulate enough to extend the channel will the mining fee amount be known. We track the total of
+mining fees paid to phoenix and adjust the `share_of_mining_fee` value that we charge our customers so that total
+fees charged approach total fees paid.
+
 ## Examples
 
 TBD:
@@ -152,17 +177,3 @@ TBD:
 - Getting LUD16 address for nostr profile.
 - Sending a zap.
 - Managing your wallet.
-
-## TODO
-
-- GC of empty wallets
-- GC on expired invoices
-- GC on old payment history (limit of txs per wallet)
-- daily charges for each wallet
-- limit on total number of empty-wallet-invoices while allowing non-empty wallet invoices
-- limit on total number of wallets (10k)
-- limit on total balance per wallet (100k sats)
-- safe service termination with automatic cashu withdrawal to NIP04 DM
-- internal payments without LN routing with a small fee
-- telemetry for wallet state monitoring
-- limit concurrent payments per wallet (10/100?)
