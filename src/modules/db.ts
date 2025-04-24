@@ -6,7 +6,12 @@ import {
   NWCTransaction,
 } from "./nwc-types";
 import { now } from "./utils";
-import { IDB, InvoiceInfo, WalletState } from "./abstract";
+import {
+  IDB,
+  InvoiceInfo,
+  OnIncomingPaymentEvent,
+  WalletState,
+} from "./abstract";
 
 export class DB implements IDB {
   private db: DatabaseSync;
@@ -89,8 +94,8 @@ export class DB implements IDB {
 
   public addMiningFeePaid(fee: number) {
     const fees = this.db.prepare(`
-      INSERT INTO fees (id, mining_fee_paid, mining_fee_received) 
-      VALUES (1, ?, 0)
+      INSERT INTO fees (id, mining_fee_paid)
+      VALUES (1, ?)
       ON CONFLICT(id) DO UPDATE 
       SET
         mining_fee_paid = mining_fee_paid + ?
@@ -329,6 +334,7 @@ export class DB implements IDB {
     };
     return {
       invoice,
+      id: r.id as string,
       clientPubkey: r.pubkey as string,
       preimage: tx.preimage!,
       zapRequest: (r.zap_request as string) || "",
@@ -337,8 +343,7 @@ export class DB implements IDB {
 
   public settleInvoice(
     clientPubkey: string,
-    id: string,
-    settledAt: number,
+    payment: OnIncomingPaymentEvent,
     walletState: WalletState,
     miningFee: number
   ) {
@@ -346,8 +351,8 @@ export class DB implements IDB {
     this.db.exec("BEGIN TRANSACTION");
 
     try {
-      const { clientPubkey: expectedPubkey } =
-        this.getInvoiceInfo({ id }) || {};
+      const { id, clientPubkey: expectedPubkey } =
+        this.getInvoiceInfo({ paymentHash: payment.paymentHash }) || {};
       if (expectedPubkey !== clientPubkey)
         throw new Error("Invalid clientPubkey for settleInvoice");
 
@@ -356,22 +361,23 @@ export class DB implements IDB {
         UPDATE records
         SET
           is_paid = 1,
-          settled_at = ?
+          settled_at = ?,
+          preimage = ?
         WHERE 
           id = ?
         AND
           is_paid = 0
       `);
-      const r = update.run(settledAt, id);
+      const r = update.run(payment.settledAt, payment.preimage, id!);
       if (r.changes === 0) {
-        console.log(new Date(), "invoice already settled", id);
+        console.log(new Date(), "invoice already settled", id!);
         this.db.exec("ROLLBACK TRANSACTION");
         return false;
       }
 
       const fees = this.db.prepare(`
-        INSERT INTO fees (id, mining_fee_paid, mining_fee_received) 
-        VALUES (1, 0, ?)
+        INSERT INTO fees (id, mining_fee_received)
+        VALUES (1, ?)
         ON CONFLICT(id) DO UPDATE 
         SET
           mining_fee_received = mining_fee_received + ?
@@ -546,7 +552,10 @@ export class DB implements IDB {
     if (req.type !== undefined) {
       args.push(req.type === "outgoing" ? 1 : 0); // is_outgoing
     }
+    args.push(req.limit || 10);
+    args.push(req.offset || 0);
 
+    console.log("listTransaction args", args);
     const recs = select.all(...args);
     return {
       transactions: recs.map((r) => this.recToTx(r)),

@@ -31,6 +31,15 @@ export class PhoenixFeePolicy implements IFeePolicy {
     // target fee that we need to charge to get closer to estimate
     const targetFee = this.miningFeeEstimate - miningFeeBalance;
 
+    console.log("calcMiningFeeMsat", {
+      channelExtensionAmount,
+      miningFeeBalance,
+      targetFee,
+      estimate: this.miningFeeEstimate,
+      received: this.miningFeeReceived,
+      paid: this.miningFeePaid,
+    });
+
     // already overcharged?
     if (targetFee <= 0) return 0;
 

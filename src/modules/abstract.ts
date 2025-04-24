@@ -86,6 +86,7 @@ export interface IBackend {
 
 export interface InvoiceInfo {
   clientPubkey: string;
+  id: string;
   invoice: NWCInvoice;
   preimage: string;
   zapRequest?: string;
@@ -116,8 +117,7 @@ export interface IDB {
   }): InvoiceInfo | undefined;
   settleInvoice(
     clientPubkey: string,
-    id: string,
-    settledAt: number,
+    payment: OnIncomingPaymentEvent,
     walletState: WalletState,
     miningFee: number
   ): boolean;

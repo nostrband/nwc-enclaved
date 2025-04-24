@@ -95,12 +95,12 @@ export class Wallet {
     const { newState, miningFee } = this.prepareStateSettleInvoice(
       invoice.amount
     );
+    console.log("prepareStateSettleInvoice", { newState, miningFee });
 
     // settle as an atomic tx in db
     const ok = this.context.db.settleInvoice(
       this.pubkey,
-      p.externalId!,
-      p.settledAt,
+      p,
       newState,
       miningFee
     );
