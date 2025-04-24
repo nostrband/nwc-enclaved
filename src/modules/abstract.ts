@@ -126,6 +126,7 @@ export interface IDB {
   settlePayment(
     clientPubkey: string,
     paymentHash: string,
+    preimage: string,
     feesPaid: number,
     walletState: WalletState
   ): void;

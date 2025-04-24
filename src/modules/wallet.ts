@@ -15,7 +15,7 @@ import {
   WalletContext,
   WalletState,
 } from "./abstract";
-import { MAX_CONCURRENT_PAYMENTS_PER_WALLET, WALLET_FEE } from "./consts";
+import { MAX_CONCURRENT_PAYMENTS_PER_WALLET, PAYMENT_FEE, WALLET_FEE } from "./consts";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 
@@ -81,11 +81,11 @@ export class Wallet {
     totalFee: number,
     phoenixFee: number
   ): WalletState {
-    const ourFee = totalFee - phoenixFee;
+    const miningFee = totalFee - phoenixFee - PAYMENT_FEE;
     return {
       channelSize: this.state.channelSize,
       balance: this.state.balance - amount - totalFee,
-      feeCredit: this.state.feeCredit - ourFee,
+      feeCredit: this.state.feeCredit - miningFee,
     };
   }
 
@@ -276,6 +276,7 @@ export class Wallet {
       this.context.db.settlePayment(
         req.clientPubkey,
         invoice.payment_hash,
+        r.preimage,
         totalFee,
         newState
       );

@@ -462,6 +462,7 @@ export class DB implements IDB {
   public settlePayment(
     clientPubkey: string,
     paymentHash: string,
+    preimage: string,
     feesPaid: number,
     walletState: WalletState
   ) {
@@ -474,7 +475,8 @@ export class DB implements IDB {
         SET
           is_paid = 1,
           fees_paid = ?,
-          settled_at = ?
+          settled_at = ?,
+          preimage = ?
         WHERE
           pubkey = ?
         AND
@@ -482,7 +484,13 @@ export class DB implements IDB {
         AND
           is_paid = 0
       `);
-      const r = update.run(feesPaid, now(), clientPubkey, paymentHash);
+      const r = update.run(
+        feesPaid,
+        now(),
+        preimage,
+        clientPubkey,
+        paymentHash
+      );
       if (r.changes !== 1) throw new Error("Payment not found by paymentHash");
 
       // update wallet
