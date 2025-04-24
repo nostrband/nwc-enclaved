@@ -1,7 +1,11 @@
 import { NWCReply, NWCRequest } from "./nwc-types";
 import { Event } from "nostr-tools";
 import { now } from "./utils";
-import { KIND_NWC_REPLY, KIND_NWC_REQUEST } from "./consts";
+import {
+  KIND_NWC_REPLY,
+  KIND_NWC_REQUEST,
+  NWC_SUPPORTED_METHODS,
+} from "./consts";
 import { Signer } from "./abstract";
 
 export class NWCServer {
@@ -60,6 +64,14 @@ export class NWCServer {
 
   private isValidReq(req: NWCRequest, res: NWCReply) {
     let valid = false;
+    if (!NWC_SUPPORTED_METHODS.includes(req.method)) {
+      res.error = {
+        code: "NOT_IMPLEMENTED",
+        message: "Unsupported method",
+      };
+      return false;
+    }
+
     switch (req.method) {
       case "pay_invoice":
         valid = !!req.params.invoice && typeof req.params.invoice === "string";
@@ -85,11 +97,8 @@ export class NWCServer {
         valid = true;
         break;
       default:
-        res.error = {
-          code: "NOT_IMPLEMENTED",
-          message: "Unsupported method",
-        };
-        return false;
+        // dev error
+        throw new Error("Supported method not implemented");
     }
 
     if (!valid) {

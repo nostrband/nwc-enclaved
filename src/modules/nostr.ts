@@ -3,7 +3,12 @@ import { normalizeRelay, now } from "./utils";
 import { Signer } from "./abstract";
 import { Relay, Req } from "./relay";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
-import { KIND_RELAYS, KIND_SERVICE_INFO } from "./consts";
+import {
+  KIND_NWC_INFO,
+  KIND_RELAYS,
+  KIND_SERVICE_INFO,
+  NWC_SUPPORTED_METHODS,
+} from "./consts";
 
 const OUTBOX_RELAYS = [
   "wss://relay.primal.net",
@@ -40,7 +45,8 @@ export async function publishServiceInfo(
     maxSendable: number;
     maxBalance: number;
   },
-  signer: Signer
+  signer: Signer,
+  nwcRelays: string[]
 ) {
   const tmpl: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
@@ -48,15 +54,27 @@ export async function publishServiceInfo(
     created_at: now(),
     content: "",
     tags: [
-      ["minSendable", ""+info.minSendable],
-      ["maxSendable", ""+info.maxSendable],
-      ["maxBalance", ""+info.maxBalance],
+      ["minSendable", "" + info.minSendable],
+      ["maxSendable", "" + info.maxSendable],
+      ["maxBalance", "" + info.maxBalance],
     ],
   };
 
   const event = await signer.signEvent(tmpl);
   await publish(event, OUTBOX_RELAYS);
-  console.log("published outbox relays", event, OUTBOX_RELAYS);
+  console.log("published service info", event, OUTBOX_RELAYS);
+
+  const nwcInfo: UnsignedEvent = {
+    pubkey: signer.getPublicKey(),
+    kind: KIND_NWC_INFO,
+    created_at: now(),
+    content: NWC_SUPPORTED_METHODS.join(","),
+    tags: [],
+  };
+
+  const nwcInfoEvent = await signer.signEvent(nwcInfo);
+  await publish(nwcInfoEvent, nwcRelays);
+  console.log("published outbox relays", event, nwcRelays);
 }
 
 export async function fetchReplaceableEvent(pubkey: string, kind: number) {

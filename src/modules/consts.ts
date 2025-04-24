@@ -30,3 +30,12 @@ export const MAX_WALLETS = 10000;
 export const MAX_ANON_INVOICES = 1000;
 export const MAX_INVOICES = 1000;
 export const MAX_TX_AGE = 30 * 24 * 3600; // 1 month
+
+export const NWC_SUPPORTED_METHODS = [
+  "pay_invoice",
+  "make_invoice",
+  "make_invoice_for",
+  "list_transactions",
+  "get_balance",
+  "get_info",
+];

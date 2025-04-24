@@ -127,7 +127,8 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
         minSendable: 1000,
         maxSendable: MAX_BALANCE,
       },
-      serviceSigner
+      serviceSigner,
+      [relayUrl]
     ).catch((e) =>
       console.error(new Date(), "failed to publish service info", e)
     );
