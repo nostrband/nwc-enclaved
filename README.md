@@ -126,7 +126,7 @@ pubkey** (i.e. throwaway pubkey), and b) has two additional parameters:
 
 To provide users with LUD-16 lightning address, the address provider must figure out how to translate `<username>@<domain>`
 to `service pubkey` and `user pubkey`. Specifics are up to providers, one approach that we're
-using with our `zap.land` LUD-16 provider (see `lnaddr.ts`) is to use `<user-npub>@<service-npub>.zap.land` as address.
+using with our [`zap.land`](https://github.com/nostrband/zap-land) LUD-16 provider is to use `<user-npub>@<service-npub>.zap.land` as address.
 An app can choose an `nwc-enclaved` service instance, get it's pubkey (`service pubkey`) and put
 `<user-npub>@<service-npub>.zap.land` as user's LN-address (`lud16` field in Nostr profiles). After this
 the user is ready to accept LN payments and zaps.
