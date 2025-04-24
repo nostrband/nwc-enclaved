@@ -47,6 +47,7 @@ export interface NWCListTransactionsReq {
 
 export interface NWCTransaction {
   type: NWCTxType;
+  invoice?: string;
   description?: string;
   description_hash?: string;
   preimage?: string;

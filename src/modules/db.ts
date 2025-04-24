@@ -330,7 +330,7 @@ export class DB implements IDB {
       ...tx,
       expires_at: tx.expires_at!,
       type: "incoming",
-      invoice: (r.invoice as string) || "",
+      invoice: tx.invoice!,
     };
     return {
       invoice,
@@ -510,6 +510,7 @@ export class DB implements IDB {
   private recToTx(r: Record<string, any>): NWCTransaction {
     return {
       type: r.is_outgoing ? "outgoing" : "incoming",
+      invoice: (r.invoice as string) || undefined,
       description: (r.description as string) || undefined,
       description_hash: (r.description_hash as string) || undefined,
       preimage: (r.preimage as string) || undefined,
