@@ -519,6 +519,7 @@ export class DB implements IDB {
       created_at: (r.created_at as number) || 0,
       expires_at: (r.expires_at as number) || 0,
       settled_at: (r.settled_at as number) || 0,
+      metadata: {},
     };
   }
 

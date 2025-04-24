@@ -56,6 +56,7 @@ export interface NWCTransaction {
   created_at: number;
   expires_at?: number;
   settled_at?: number;
+  metadata: any;
 }
 
 export interface MakeInvoiceReq {
