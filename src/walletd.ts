@@ -120,7 +120,7 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   // advertise our relays
   await publishNip65Relays([relayUrl], serviceSigner);
   // update our announcement once per minute
-  setInterval(async () => {
+  const announce = async () => {
     await publishServiceInfo(
       {
         maxBalance: MAX_BALANCE,
@@ -131,7 +131,9 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
     ).catch((e) =>
       console.error(new Date(), "failed to publish service info", e)
     );
-  }, 60000);
+  };
+  await announce();
+  setInterval(announce, 60000);
 
   // fetch global mining fee state
   const feeState = db.getFees();
