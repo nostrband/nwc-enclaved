@@ -65,10 +65,7 @@ export class Wallet {
       );
 
       // calc mining fee separately to return it to caller
-      miningFee = Math.ceil(
-        channelExtensionAmount *
-          this.context.fees.calcMiningFeeMsat(channelExtensionAmount)
-      );
+      miningFee = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
 
       // add mining fee to wallet's fee credit
       newState.feeCredit += miningFee;
