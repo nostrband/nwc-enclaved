@@ -303,6 +303,8 @@ export class Phoenix implements IBackend {
       params.description = req.description;
     } else if (req.descriptionHash) {
       params.descriptionHash = req.descriptionHash;
+    } else {
+      params.description = "";
     }
 
     const r = await this.call<MakeInvoiceReply>(
