@@ -16,6 +16,8 @@ import {
   WalletState,
 } from "./abstract";
 import { MAX_CONCURRENT_PAYMENTS_PER_WALLET, WALLET_FEE } from "./consts";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha256";
 
 export class Wallet {
   private context: WalletContext;
@@ -153,8 +155,6 @@ export class Wallet {
       expires_at: decoded.timestamp! + decoded.timeExpireDate!,
     };
 
-    const preimage = decoded.tagsObject.payment_secret;
-
     const route: RouteHop[] =
       decoded.tagsObject.routing_info?.map((r) => ({
         baseFee: r.fee_base_msat,
@@ -163,7 +163,6 @@ export class Wallet {
 
     return {
       invoice,
-      preimage,
       route,
       nodeId: decoded.payeeNodeKey,
     };
@@ -181,7 +180,7 @@ export class Wallet {
       throw new Error(NWC_RATE_LIMITED);
 
     // parse bolt11 string
-    const { invoice, preimage, route, nodeId } = this.parseBolt11(
+    const { invoice, route, nodeId } = this.parseBolt11(
       req.invoice,
       req.amount
     );
@@ -250,7 +249,8 @@ export class Wallet {
     try {
       // pay
       const r = await this.context.backend.payInvoice(req);
-      if (r.preimage !== preimage) throw new Error("Wrong preimage");
+      if (bytesToHex(sha256(hexToBytes(r.preimage))) !== invoice.payment_hash)
+        throw new Error("Wrong preimage");
 
       // done
       this.pendingPayments.delete(invoice.payment_hash);
