@@ -555,11 +555,13 @@ export class DB implements IDB {
     args.push(req.limit || 10);
     args.push(req.offset || 0);
 
-    console.log("listTransaction args", args);
+    // console.log("listTransaction args", args);
     const recs = select.all(...args);
-    return {
+    const r = {
       transactions: recs.map((r) => this.recToTx(r)),
     };
+    console.log("listTransactions", r);
+    return r;
   }
 
   public getLastInvoiceSettledAt() {
