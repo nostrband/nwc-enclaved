@@ -1,5 +1,10 @@
 # `nwc-enclaved` - custodial NWC wallet for TEE
 
+The simplest way to integrate Lightning Network and Nostr Zaps to your vibe-coded apps
+and agents. Guide [here](VIBE.md).
+
+## Rationale
+
 Native digital payments enable lots of new possibilities on the internet. Lightning Network
 is the best tool right now in terms of maturity, privacy, sovereignty, costs and performance, but the UX
 of it is still not perfect:
@@ -129,12 +134,12 @@ the user is ready to accept LN payments and zaps.
 ## Service announcement event
 
 `nwc-enclaved` will publish a NIP-65 `kind:10002` event listing the relays it's using for NWC, and an announcement
-event of `kind:13195` to enable discovery and to inform clients about fees and other metadata:
+event of `kind:13196` to enable discovery and to inform clients about fees and other metadata:
 
 ```
 {
   ...
-  "kind": 13195,
+  "kind": 13196,
   "pubkey": <wallet pubkey>,
   "tags": [
       ["minSendable", 1000],

@@ -117,16 +117,21 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
   servicePubkey = getPublicKey(servicePrivkey);
   console.log("servicePubkey", servicePubkey);
 
-  // announce
+  // advertise our relays
   await publishNip65Relays([relayUrl], serviceSigner);
-  await publishServiceInfo(
-    {
-      maxBalance: MAX_BALANCE,
-      minSendable: 1000,
-      maxSendable: MAX_BALANCE,
-    },
-    serviceSigner
-  );
+  // update our announcement once per minute
+  setInterval(async () => {
+    await publishServiceInfo(
+      {
+        maxBalance: MAX_BALANCE,
+        minSendable: 1000,
+        maxSendable: MAX_BALANCE,
+      },
+      serviceSigner
+    ).catch((e) =>
+      console.error(new Date(), "failed to publish service info", e)
+    );
+  }, 60000);
 
   // fetch global mining fee state
   const feeState = db.getFees();

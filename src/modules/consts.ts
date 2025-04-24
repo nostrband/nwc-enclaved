@@ -1,6 +1,6 @@
 export const KIND_RELAYS = 10002;
 export const KIND_NWC_INFO = 13194;
-export const KIND_SERVICE_INFO = 13195;
+export const KIND_SERVICE_INFO = 13196;
 export const KIND_NWC_REQUEST = 23194;
 export const KIND_NWC_REPLY = 23195;
 export const KIND_NWC_NOTIFICATION = 23196;

@@ -124,6 +124,8 @@ export class Phoenix implements IBackend {
       console.log(new Date(), "phoenixd websocket connected");
       this.info = await this.getBackendInfo();
       console.log(new Date(), "phoenixd info", this.info);
+      // this results in syncPaymentsSince call so we
+      // will resync on every ws socket reconnect
       this.onOpen!();
     };
     this.ws.onclose = async () => {
