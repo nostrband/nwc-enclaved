@@ -189,3 +189,4 @@ TBD:
 - Getting LUD16 address for nostr profile.
 - Sending a zap.
 - Managing your wallet.
+- add ["encryption", "nip44_v2"] and migrate to NIP-44
