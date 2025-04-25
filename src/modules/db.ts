@@ -156,7 +156,7 @@ export class DB implements IDB {
         WHERE
           pubkey = ?
       `);
-      const wr = wallet.run(WALLET_FEE, WALLET_FEE_PERIOD);
+      const wr = wallet.run(WALLET_FEE, WALLET_FEE_PERIOD, pubkey);
       if (!wr.changes) throw new Error("Failed to update wallet fee balance");
 
       const fee = this.db.prepare(`
