@@ -7,7 +7,7 @@ import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
-import { MAX_BALANCE, MAX_TX_AGE, PHOENIX_PASSWORD } from "./modules/consts";
+import { MAX_BALANCE, MAX_TX_AGE } from "./modules/consts";
 import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
@@ -110,7 +110,13 @@ async function GC() {
   }, 1000);
 }
 
-export async function startWalletd({ relayUrl }: { relayUrl: string }) {
+export async function startWalletd({
+  relayUrl,
+  phoenixPassword,
+}: {
+  relayUrl: string;
+  phoenixPassword: string;
+}) {
   // read or create our key
   const servicePrivkey = getSecretKey();
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
@@ -156,7 +162,7 @@ export async function startWalletd({ relayUrl }: { relayUrl: string }) {
 
   // start phoenix client and sync incoming payments
   phoenix.start({
-    password: PHOENIX_PASSWORD,
+    password: phoenixPassword,
     onIncomingPayment: async (p) => wallets.onIncomingPayment(p),
     onOpen: () => phoenix.syncPaymentsSince(db.getLastInvoiceSettledAt()),
     onMiningFeeEstimate: (miningFee: number) =>
