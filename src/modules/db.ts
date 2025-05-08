@@ -538,6 +538,7 @@ export class DB implements IDB {
   }
 
   public listTransactions(req: NWCListTransactionsReq): {
+    total_count: number;
     transactions: NWCTransaction[];
   } {
     let sql = `
@@ -573,8 +574,13 @@ export class DB implements IDB {
     // console.log("listTransaction args", args);
     const recs = select.all(...args);
     const r = {
+      total_count: 0,
       transactions: recs.map((r) => this.recToTx(r)),
     };
+
+    // const count = this.db.prepare(`SELECT COUNT(id) as cnt FROM records WHERE pubkey = ?`);
+    // const { cnt } = count.get(req.clientPubkey);
+
     console.log("listTransactions", r);
     return r;
   }

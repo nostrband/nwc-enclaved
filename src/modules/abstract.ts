@@ -131,6 +131,7 @@ export interface IDB {
     walletState: WalletState
   ): void;
   listTransactions(req: NWCListTransactionsReq): {
+    total_count: number;
     transactions: NWCTransaction[];
   };
   getLastInvoiceSettledAt(): number;

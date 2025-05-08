@@ -300,7 +300,10 @@ export class Wallet {
       }
 
       // result
-      return r;
+      return {
+        preimage: r.preimage,
+        fees_paid: totalFee
+      };
     } catch (e) {
       // cleanup on error
       this.pendingPayments.delete(invoice.payment_hash);
