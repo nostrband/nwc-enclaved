@@ -7,7 +7,14 @@ import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
-import { MAX_BALANCE, MAX_TX_AGE } from "./modules/consts";
+import {
+  MAX_BALANCE,
+  MAX_TX_AGE,
+  PAYMENT_FEE,
+  PHOENIX_LIQUIDITY_FEE,
+  PHOENIX_PAYMENT_FEE_BASE,
+  PHOENIX_PAYMENT_FEE_PCT,
+} from "./modules/consts";
 import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
@@ -124,7 +131,7 @@ export async function startWalletd({
   console.log("servicePubkey", servicePubkey);
 
   // advertise our relays
-  await publishNip65Relays([relayUrl], serviceSigner);
+  await publishNip65Relays(serviceSigner);
   // update our announcement once per minute
   const announce = async () => {
     await publishServiceInfo(
@@ -132,6 +139,9 @@ export async function startWalletd({
         maxBalance: MAX_BALANCE,
         minSendable: 1000,
         maxSendable: MAX_BALANCE,
+        liquidityFeeRate: PHOENIX_LIQUIDITY_FEE,
+        paymentFeeRate: PHOENIX_PAYMENT_FEE_PCT,
+        paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
       },
       serviceSigner,
       [relayUrl]

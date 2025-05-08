@@ -5,14 +5,20 @@ import { Relay, Req } from "./relay";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import {
   KIND_NWC_INFO,
+  KIND_PROFILE,
   KIND_RELAYS,
   KIND_SERVICE_INFO,
   NWC_SUPPORTED_METHODS,
 } from "./consts";
 
+const DEFAULT_RELAYS = [
+  "wss://relay.damus.io",
+  "wss://relay.primal.net",
+  "wss://nostr.mom",
+];
+
 const OUTBOX_RELAYS = [
   "wss://relay.primal.net",
-  "wss://relay.damus.io",
   "wss://relay.nostr.band",
   "wss://purplepag.es",
   "wss://user.kindpag.es",
@@ -27,13 +33,13 @@ async function publish(event: Event, relays: string[]) {
   await Promise.allSettled(promises);
 }
 
-export async function publishNip65Relays(relays: string[], signer: Signer) {
+export async function publishNip65Relays(signer: Signer) {
   const tmpl: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
     kind: KIND_RELAYS,
     created_at: now(),
     content: "",
-    tags: relays.map((r) => ["r", r]),
+    tags: DEFAULT_RELAYS.map((r) => ["r", r]),
   };
 
   const event = await signer.signEvent(tmpl);
@@ -46,25 +52,57 @@ export async function publishServiceInfo(
     minSendable: number;
     maxSendable: number;
     maxBalance: number;
+    liquidityFeeRate: number;
+    paymentFeeRate: number;
+    paymentFeeBase: number;
   },
   signer: Signer,
   nwcRelays: string[]
 ) {
-  const tmpl: UnsignedEvent = {
+  const serviceInfo: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
     kind: KIND_SERVICE_INFO,
     created_at: now(),
     content: "",
     tags: [
+      ...nwcRelays.map((r) => ["relay", r]),
       ["minSendable", "" + info.minSendable],
       ["maxSendable", "" + info.maxSendable],
       ["maxBalance", "" + info.maxBalance],
+      ["liquidityFeeRate", "" + info.liquidityFeeRate],
+      ["paymentFeeRate", "" + info.paymentFeeRate],
+      ["paymentFeeBase", "" + info.paymentFeeBase],
     ],
   };
 
-  const event = await signer.signEvent(tmpl);
-  await publish(event, OUTBOX_RELAYS);
-  console.log("published service info", event, OUTBOX_RELAYS);
+  const serviceEvent = await signer.signEvent(serviceInfo);
+  await publish(serviceEvent, [...DEFAULT_RELAYS, ...OUTBOX_RELAYS]);
+  console.log(
+    "published service info",
+    serviceEvent,
+    DEFAULT_RELAYS,
+    OUTBOX_RELAYS
+  );
+
+  const profile: UnsignedEvent = {
+    pubkey: signer.getPublicKey(),
+    kind: KIND_PROFILE,
+    created_at: now(),
+    content: JSON.stringify({
+      name: "nwc-enclaved wallet service",
+      about:
+        "This is a custodial Lightning Wallet with NWC support.\nLearn more at https://github.com/nostrband/nwc-enclaved",
+      picture: "",
+    }),
+    tags: [
+      ["t", "nwc-enclaved"],
+      ["r", "https://github.com/nostrband/nwc-enclaved"],
+    ],
+  };
+
+  const profileEvent = await signer.signEvent(profile);
+  await publish(profileEvent, OUTBOX_RELAYS);
+  console.log("published profile", profileEvent, OUTBOX_RELAYS);
 
   const nwcInfo: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
@@ -76,7 +114,7 @@ export async function publishServiceInfo(
 
   const nwcInfoEvent = await signer.signEvent(nwcInfo);
   await publish(nwcInfoEvent, nwcRelays);
-  console.log("published outbox relays", event, nwcRelays);
+  console.log("published nwc info", nwcInfoEvent, nwcRelays);
 }
 
 export async function fetchReplaceableEvent(pubkey: string, kind: number) {
@@ -99,7 +137,7 @@ export async function fetchReplaceableEvent(pubkey: string, kind: number) {
     };
   };
 
-  const promises = OUTBOX_RELAYS.map((url) => {
+  const promises = [...DEFAULT_RELAYS, ...OUTBOX_RELAYS].map((url) => {
     const r = new Relay(url);
     return new Promise<void>((ok) => r.req(makeReq(ok))).finally(() =>
       r.dispose()

@@ -40,7 +40,7 @@ export class Wallets {
     this.context = context;
   }
 
-  public start(opts: { servicePubkey: string, onZapReceipt: OnZapReceipt }) {
+  public start(opts: { servicePubkey: string; onZapReceipt: OnZapReceipt }) {
     this.servicePubkey = opts.servicePubkey;
     this.onZapReceipt = opts.onZapReceipt;
 
@@ -143,8 +143,11 @@ export class Wallets {
 
     // make sure there is at least one channel first,
     // service operator should topup the backend
-    const info = await this.context.backend.getInfo();
-    if (!info.channels.length) throw new Error("Service not available, no liquidity");
+    if (pubkey !== this.servicePubkey) {
+      const info = await this.context.backend.getInfo();
+      if (!info.channels.length)
+        throw new Error("Service not available, no liquidity");
+    }
 
     // get target wallet
     const w = this.wallets.get(pubkey);

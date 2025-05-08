@@ -1,3 +1,6 @@
+export const KIND_PROFILE = 0;
+export const KIND_NOTE = 1;
+
 export const KIND_RELAYS = 10002;
 export const KIND_NWC_INFO = 13194;
 export const KIND_SERVICE_INFO = 13196;

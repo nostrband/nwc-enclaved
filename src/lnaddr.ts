@@ -34,13 +34,13 @@ async function getWalletInfo(walletPubkey: string, res: http.ServerResponse) {
   const cached = cache.get(walletPubkey);
   if (!cached || now() - cached.timestamp > CACHE_TTL) {
     // wallet relays
-    const relays = await fetchPubkeyRelays(walletPubkey);
-    console.log("wallet relays", relays);
-    if (!relays.length) {
-      res.writeHead(504, CORS_HEADERS);
-      res.end("Wallet relays not found");
-      return;
-    }
+    // const relays = await fetchPubkeyRelays(walletPubkey);
+    // console.log("wallet relays", relays);
+    // if (!relays.length) {
+    //   res.writeHead(504, CORS_HEADERS);
+    //   res.end("Wallet relays not found");
+    //   return;
+    // }
 
     // wallet info
     const info = await fetchReplaceableEvent(walletPubkey, KIND_SERVICE_INFO);
@@ -49,6 +49,8 @@ async function getWalletInfo(walletPubkey: string, res: http.ServerResponse) {
       res.end("Wallet info not found");
       return;
     }
+
+    const relays = info.tags.filter(t => t.length > 1 && t[0] === 'relay').map(t => t[1]);
 
     cache.set(walletPubkey, {
       timestamp: now(),
