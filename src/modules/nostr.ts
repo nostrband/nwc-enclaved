@@ -111,16 +111,16 @@ export async function publishServiceInfo(
       name: "nwc-enclaved wallet service",
       about: `This is a custodial Lightning Wallet with NWC support.
 Learn more at https://github.com/nostrband/nwc-enclaved\n
-Max balance: ${info.maxBalance / 1000} sats\n
+Max balance: ${info.maxBalance / 1000} sats.\n
 Liquidity fee: ${
         info.liquidityFeeRate
-      } + share of mining fees, paid when sending payments\n
+      } + share of mining fees, paid when sending payments.\n
 Payment fee: ${info.paymentFeeBase / 1000} sats + ${(
         info.paymentFeeRate * 100
-      ).toFixed(2)}%\n
+      ).toFixed(2)}%.\n
 Wallet fee: ${info.walletFeeBase / 1000} sats per ${
         info.walletFeePeriod / 3600
-      } hours\n
+      } hours.\n
 ${
   debug
     ? `DEBUG INSTANCE, not private, may break or get terminated at any time!`
