@@ -1,4 +1,4 @@
-import { Event, UnsignedEvent, validateEvent, verifyEvent } from "nostr-tools";
+import { Event, UnsignedEvent, nip19, validateEvent, verifyEvent } from "nostr-tools";
 import { normalizeRelay, now } from "./utils";
 import { Signer } from "./abstract";
 import { Relay, Req } from "./relay";
@@ -103,19 +103,21 @@ export async function publishServiceInfo(
     OUTBOX_RELAYS
   );
 
+  const npub = nip19.npubEncode(signer.getPublicKey());
   const profile: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
     kind: KIND_PROFILE,
     created_at: now(),
     content: JSON.stringify({
       name: "nwc-enclaved wallet service",
+      lud16: `${npub}@${npub}.zap.land`,
       about: `This is a safe custodial Lightning Wallet with NWC support.\n
 It runs in a TEE (trusted execution environment) so it's private and funds can't be stolen.\n
 Learn more at https://github.com/nostrband/nwc-enclaved\n
 Max balance: ${info.maxBalance / 1000} sats.\n
-Liquidity fee: ${
-        info.liquidityFeeRate
-      } + share of mining fees, paid when sending payments.\n
+Liquidity fee: ${(info.liquidityFeeRate * 100).toFixed(
+        2
+      )}% + share of mining fees, paid when sending payments.\n
 Payment fee: ${info.paymentFeeBase / 1000} sats + ${(
         info.paymentFeeRate * 100
       ).toFixed(2)}%.\n
