@@ -133,6 +133,7 @@ export async function startWalletd({
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
   servicePubkey = getPublicKey(servicePrivkey);
   console.log("servicePubkey", servicePubkey);
+  console.log("maxBalance", maxBalance);
 
   // advertise our relays
   await publishNip65Relays(serviceSigner);

@@ -6,6 +6,7 @@ import { MAX_BALANCE } from "./modules/consts";
 global.WebSocket ??= WebSocket;
 
 console.log("args", process.argv);
+console.log("env", process.env);
 const phoenixPassword = process.argv[2];
 const relayUrl = process.argv?.[3] || "wss://relay.zap.land";
 const maxBalance = Number(process.env["MAX_BALANCE"]) || MAX_BALANCE;
