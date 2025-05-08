@@ -109,7 +109,8 @@ export async function publishServiceInfo(
     created_at: now(),
     content: JSON.stringify({
       name: "nwc-enclaved wallet service",
-      about: `This is a custodial Lightning Wallet with NWC support.
+      about: `This is a safe custodial Lightning Wallet with NWC support.\n
+It runs in a TEE (trusted execution environment) so it's private and funds can't be stolen.\n
 Learn more at https://github.com/nostrband/nwc-enclaved\n
 Max balance: ${info.maxBalance / 1000} sats.\n
 Liquidity fee: ${
