@@ -6,7 +6,6 @@ import {
 import {
   MAX_ANON_INVOICES,
   MAX_ANON_INVOICE_EXPIRY,
-  MAX_BALANCE,
   MAX_INVOICES,
   MAX_INVOICE_EXPIRY,
   MAX_WALLETS,
@@ -35,14 +34,20 @@ export class Wallets {
   private wallets = new Map<string, Wallet>();
   private servicePubkey?: string;
   private onZapReceipt?: OnZapReceipt;
+  private maxBalance: number = 0;
 
   constructor(context: WalletContext) {
     this.context = context;
   }
 
-  public start(opts: { servicePubkey: string; onZapReceipt: OnZapReceipt }) {
+  public start(opts: {
+    servicePubkey: string;
+    onZapReceipt: OnZapReceipt;
+    maxBalance: number;
+  }) {
     this.servicePubkey = opts.servicePubkey;
     this.onZapReceipt = opts.onZapReceipt;
+    this.maxBalance = opts.maxBalance;
 
     const wallets = this.context.db.listWallets();
     for (const w of wallets) {
@@ -139,7 +144,8 @@ export class Wallets {
   ): Promise<NWCInvoice> {
     if (req.amount < 1000 || req.amount % 1000 > 0)
       throw new Error("Only sat payments are supported");
-    if (req.amount > MAX_BALANCE) throw new Error("Max invoice size exceeded");
+    if (req.amount > this.maxBalance)
+      throw new Error("Max invoice size exceeded");
 
     // make sure there is at least one channel first,
     // service operator should topup the backend
@@ -157,7 +163,7 @@ export class Wallets {
       throw new Error("No new wallets allowed");
 
     // limit total balance
-    if (w && w.getState().balance + req.amount > MAX_BALANCE)
+    if (w && w.getState().balance + req.amount > this.maxBalance)
       throw new Error("Wallet balance would exceed max balance");
 
     // max unpaid invoices

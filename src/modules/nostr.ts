@@ -55,6 +55,8 @@ export async function publishServiceInfo(
     liquidityFeeRate: number;
     paymentFeeRate: number;
     paymentFeeBase: number;
+    walletFeeBase: number;
+    walletFeePeriod: number;
   },
   signer: Signer,
   nwcRelays: string[]
@@ -69,11 +71,28 @@ export async function publishServiceInfo(
       ["minSendable", "" + info.minSendable],
       ["maxSendable", "" + info.maxSendable],
       ["maxBalance", "" + info.maxBalance],
-      ["liquidityFeeRate", "" + info.liquidityFeeRate],
-      ["paymentFeeRate", "" + info.paymentFeeRate],
+      ["liquidityFeeRate", "" + info.liquidityFeeRate.toFixed(4)],
+      ["paymentFeeRate", "" + info.paymentFeeRate.toFixed(4)],
       ["paymentFeeBase", "" + info.paymentFeeBase],
+      ["walletFeeBase", "" + info.walletFeeBase],
+      ["walletFeePeriod", "" + info.walletFeePeriod],
     ],
   };
+
+  switch (process.env["ENCLAVE"]) {
+    case "dev":
+      serviceInfo.tags.push(["t", "dev"]);
+      break;
+    case "prod":
+      serviceInfo.tags.push(["t", "prod"]);
+      break;
+    default:
+      serviceInfo.tags.push(["t", "debug"]);
+      break;
+  }
+  const dev = process.env["ENCLAVE"] === "dev";
+  const prod = process.env["ENCLAVE"] === "prod";
+  const debug = !dev && !prod;
 
   const serviceEvent = await signer.signEvent(serviceInfo);
   await publish(serviceEvent, [...DEFAULT_RELAYS, ...OUTBOX_RELAYS]);
@@ -90,8 +109,25 @@ export async function publishServiceInfo(
     created_at: now(),
     content: JSON.stringify({
       name: "nwc-enclaved wallet service",
-      about:
-        "This is a custodial Lightning Wallet with NWC support.\nLearn more at https://github.com/nostrband/nwc-enclaved",
+      about: `This is a custodial Lightning Wallet with NWC support.
+Learn more at https://github.com/nostrband/nwc-enclaved\n
+Max balance: ${info.maxBalance / 1000} sats\n
+Liquidity fee: ${
+        info.liquidityFeeRate
+      } + share of mining fees, paid when sending payments\n
+Payment fee: ${info.paymentFeeBase / 1000} sats + ${(
+        info.paymentFeeRate * 100
+      ).toFixed(2)}%\n
+Wallet fee: ${info.walletFeeBase / 1000} sats per ${
+        info.walletFeePeriod / 3600
+      } hours\n
+${
+  debug
+    ? `DEBUG INSTANCE, not private, may break or get terminated at any time!`
+    : ""
+}
+${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
+`,
       picture: "",
     }),
     tags: [

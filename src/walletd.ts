@@ -14,6 +14,8 @@ import {
   PHOENIX_LIQUIDITY_FEE,
   PHOENIX_PAYMENT_FEE_BASE,
   PHOENIX_PAYMENT_FEE_PCT,
+  WALLET_FEE,
+  WALLET_FEE_PERIOD,
 } from "./modules/consts";
 import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
@@ -120,9 +122,11 @@ async function GC() {
 export async function startWalletd({
   relayUrl,
   phoenixPassword,
+  maxBalance,
 }: {
   relayUrl: string;
   phoenixPassword: string;
+  maxBalance: number;
 }) {
   // read or create our key
   const servicePrivkey = getSecretKey();
@@ -136,12 +140,14 @@ export async function startWalletd({
   const announce = async () => {
     await publishServiceInfo(
       {
-        maxBalance: MAX_BALANCE,
+        maxBalance: maxBalance,
         minSendable: 1000,
-        maxSendable: MAX_BALANCE,
+        maxSendable: maxBalance,
         liquidityFeeRate: PHOENIX_LIQUIDITY_FEE,
         paymentFeeRate: PHOENIX_PAYMENT_FEE_PCT,
         paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
+        walletFeeBase: WALLET_FEE,
+        walletFeePeriod: WALLET_FEE_PERIOD,
       },
       serviceSigner,
       [relayUrl]
@@ -160,6 +166,7 @@ export async function startWalletd({
   // load all wallets
   wallets.start({
     servicePubkey,
+    maxBalance,
     onZapReceipt: (zapRequest: string, bolt11: string, preimage: string) => {
       publishZapReceipt(zapRequest, bolt11, preimage, serviceSigner).catch(
         (e) => {
