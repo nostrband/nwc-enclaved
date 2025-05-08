@@ -124,7 +124,7 @@ Wallet fee: ${info.walletFeeBase / 1000} sats per ${
       } hours.\n
 ${
   debug
-    ? `DEBUG INSTANCE, not private, may break or get terminated at any time!`
+    ? `DEBUG INSTANCE, not safe, may break or get terminated at any time!`
     : ""
 }
 ${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
