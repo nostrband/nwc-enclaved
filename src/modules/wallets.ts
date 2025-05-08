@@ -134,7 +134,7 @@ export class Wallets {
   }
 
   public async makeInvoiceFor(req: NWCMakeInvoiceForReq): Promise<NWCInvoice> {
-    return this.makeInvoiceExt(req, req.clientPubkey, req.zap_request);
+    return this.makeInvoiceExt(req, req.pubkey, req.zap_request);
   }
 
   private async makeInvoiceExt(
