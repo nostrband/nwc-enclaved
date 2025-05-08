@@ -20,7 +20,7 @@ const OUTBOX_RELAYS = [
 async function publish(event: Event, relays: string[]) {
   const promises = relays.map((r) => {
     const relay = new Relay(r);
-    return relay.publish(event, 1000).finally(() => relay.dispose());
+    return relay.publish(event).finally(() => relay.dispose());
   });
   await Promise.allSettled(promises);
 }

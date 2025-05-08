@@ -4,7 +4,7 @@ import { startWalletd } from "./walletd";
 // @ts-ignore
 global.WebSocket ??= WebSocket;
 
-// console.log("args", process.argv);
+console.log("args", process.argv);
 const phoenixPassword = process.argv[2];
-const relayUrl = process.argv?.[3] || "wss://relay.primal.net";
+const relayUrl = process.argv?.[3] || "wss://relay.zap.land";
 startWalletd({ relayUrl, phoenixPassword });

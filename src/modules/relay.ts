@@ -148,11 +148,11 @@ export class Relay {
   }
 
   private onNotice(cmd: any[]) {
-    console.log("notice", this.relayUrl, cmd);
+    console.log(new Date(), "notice", this.relayUrl, cmd);
   }
 
   private onClosed(cmd: any[]) {
-    console.log("closed", this.relayUrl, cmd);
+    console.log(new Date(), "closed", this.relayUrl, cmd);
     if (cmd.length < 2) throw new Error("Bad CLOSED");
     const reqId = cmd[1];
     const req = this.reqs.get(reqId);
@@ -172,7 +172,7 @@ export class Relay {
     const cbs = this.publishing.get(id);
     if (!cbs) return;
     this.publishing.delete(id);
-    console.log("publish result", this.relayUrl, cmd);
+    console.log(new Date(), "publish result", this.relayUrl, cmd);
     const { ok, err } = cbs;
     if (cmd[2]) ok();
     else err("Failed to publish event");
@@ -192,7 +192,7 @@ export class Relay {
     // take only valid nostr event fields
     const { id, pubkey, created_at, kind, content, tags, sig } = e;
     const cmd = ["EVENT", { id, pubkey, created_at, kind, content, tags, sig }];
-    console.log("publish", this.relayUrl, cmd[1]);
+    console.log(new Date(), "publish", this.relayUrl, cmd[1]);
     this.ws!.send(JSON.stringify(cmd));
   }
 
@@ -204,7 +204,7 @@ export class Relay {
     if (!this.reqs.delete(id)) return;
     if (this.ws!.readyState !== WebSocket.OPEN) return;
     const cmd = ["CLOSE", id];
-    console.log("close", this.relayUrl, cmd);
+    console.log(new Date(), "close", this.relayUrl, cmd);
     this.ws!.send(JSON.stringify(cmd));
   }
 
@@ -219,7 +219,7 @@ export class Relay {
     return new Promise<void>(async (ok, err) => {
       // timeout handler
       const timer = setTimeout(() => {
-        console.log("publish timeout", this.relayUrl, e.id);
+        console.log(new Date(), "publish timeout", this.relayUrl, e.id);
         this.publishing.delete(e.id);
         err("Publish timeout");
       }, to);

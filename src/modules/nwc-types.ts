@@ -47,6 +47,7 @@ export interface NWCListTransactionsReq {
 
 export interface NWCTransaction {
   type: NWCTxType;
+  state: "settled" | "pending" | "failed";
   invoice?: string;
   description?: string;
   description_hash?: string;

@@ -518,6 +518,11 @@ export class DB implements IDB {
   private recToTx(r: Record<string, any>): NWCTransaction {
     return {
       type: r.is_outgoing ? "outgoing" : "incoming",
+      state: r.settled_at
+        ? "settled"
+        : r.expires_at < now()
+        ? "failed"
+        : "pending",
       invoice: (r.invoice as string) || undefined,
       description: (r.description as string) || undefined,
       description_hash: (r.description_hash as string) || undefined,

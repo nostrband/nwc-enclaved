@@ -10,6 +10,7 @@ import { Signer } from "./abstract";
 
 export class NWCServer {
   private signer: Signer;
+  private done = new Set<string>();
 
   constructor(signer: Signer) {
     this.signer = signer;
@@ -114,6 +115,9 @@ export class NWCServer {
   // process event tagging pubkey
   public async process(e: Event): Promise<Event | undefined> {
     if (e.kind !== KIND_NWC_REQUEST) return; // ignore irrelevant kinds
+    if (this.done.has(e.id)) return;
+    this.done.add(e.id);
+
     try {
       const expiration = Number(
         e.tags.find((t) => t.length > 1 && t[0] === "expiration")?.[1] || 0
