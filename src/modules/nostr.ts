@@ -12,9 +12,11 @@ import {
 
 const OUTBOX_RELAYS = [
   "wss://relay.primal.net",
+  "wss://relay.damus.io",
+  "wss://relay.nostr.band",
   "wss://purplepag.es",
-  "wss://user.kindpag.es/",
-  "wss://relay.nos.social/",
+  "wss://user.kindpag.es",
+  "wss://relay.nos.social",
 ];
 
 async function publish(event: Event, relays: string[]) {
