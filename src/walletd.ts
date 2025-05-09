@@ -135,32 +135,6 @@ export async function startWalletd({
   console.log("servicePubkey", servicePubkey);
   console.log("maxBalance", maxBalance);
 
-  // advertise our relays
-  await publishNip65Relays(serviceSigner);
-  // update our announcement once per minute
-  const announce = async () => {
-    await publishServiceInfo(
-      {
-        maxBalance: maxBalance,
-        minSendable: 1000,
-        maxSendable: maxBalance,
-        liquidityFeeRate: PHOENIX_LIQUIDITY_FEE,
-        paymentFeeRate: PHOENIX_PAYMENT_FEE_PCT,
-        paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
-        walletFeeBase: WALLET_FEE,
-        walletFeePeriod: WALLET_FEE_PERIOD,
-        open: (await phoenix.getInfo()).channels.length > 0,
-        stats: db.getStats(servicePubkey),
-      },
-      serviceSigner,
-      [relayUrl]
-    ).catch((e) =>
-      console.error(new Date(), "failed to publish service info", e)
-    );
-  };
-  await announce();
-  setInterval(announce, 60000);
-
   // fetch global mining fee state
   const feeState = db.getFees();
   fees.addMiningFeePaid(feeState.miningFeePaid);
@@ -217,6 +191,32 @@ export async function startWalletd({
 
   // listen to requests targeting our pubkey
   requestListener.addPubkey(servicePubkey, [relayUrl]);
+
+  // advertise our relays
+  await publishNip65Relays(serviceSigner);
+  // update our announcement once per minute
+  const announce = async () => {
+    await publishServiceInfo(
+      {
+        maxBalance: maxBalance,
+        minSendable: 1000,
+        maxSendable: maxBalance,
+        liquidityFeeRate: PHOENIX_LIQUIDITY_FEE,
+        paymentFeeRate: PHOENIX_PAYMENT_FEE_PCT,
+        paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
+        walletFeeBase: WALLET_FEE,
+        walletFeePeriod: WALLET_FEE_PERIOD,
+        open: (await phoenix.getInfo()).channels.length > 0,
+        stats: db.getStats(servicePubkey),
+      },
+      serviceSigner,
+      [relayUrl]
+    ).catch((e) =>
+      console.error(new Date(), "failed to publish service info", e)
+    );
+  };
+  await announce();
+  setInterval(announce, 60000);
 
   // clear old txs, empty wallets, unpaid expired invoices etc
   GC();
