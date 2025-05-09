@@ -149,6 +149,8 @@ export async function startWalletd({
         paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
         walletFeeBase: WALLET_FEE,
         walletFeePeriod: WALLET_FEE_PERIOD,
+        open: (await phoenix.getInfo()).channels.length > 0,
+        stats: db.getStats(servicePubkey),
       },
       serviceSigner,
       [relayUrl]

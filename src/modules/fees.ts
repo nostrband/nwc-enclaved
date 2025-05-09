@@ -24,6 +24,10 @@ export class PhoenixFeePolicy implements IFeePolicy {
     this.miningFeePaid += amount;
   }
 
+  getMiningFeePaid() {
+    return this.miningFeePaid;
+  }
+
   calcMiningFeeMsat(channelExtensionAmount: number): number {
     // how much more we received than we paid
     const miningFeeBalance = this.miningFeeReceived - this.miningFeePaid;

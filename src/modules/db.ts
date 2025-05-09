@@ -86,6 +86,26 @@ export class DB implements IDB {
       CREATE INDEX IF NOT EXISTS wallets_next_wallet_fee_at_index
       ON wallets (next_wallet_fee_at)
     `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS records_type_index
+      ON records (is_paid, is_outgoing)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS wallets_created_at_index
+      ON wallets (created_at)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS wallets_balance_index
+      ON wallets (balance)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS wallets_fee_credit_index
+      ON wallets (fee_credit)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS wallets_next_fee_index
+      ON wallets (balance, next_wallet_fee_at)
+    `);
   }
 
   public dispose() {
@@ -591,5 +611,48 @@ export class DB implements IDB {
     );
     const r = select.get();
     return (r?.settled_at as number) || 0;
+  }
+
+  public getStats(servicePubkey: string) {
+    const stats = {
+      payments: 0,
+      paymentsHour: 0,
+      wallets: 0,
+      walletsHour: 0,
+      totalBalance: 0,
+      totalFeeCredit: 0,
+    };
+
+    const payments = this.db.prepare(
+      `SELECT COUNT(id) as cnt FROM records WHERE is_outgoing = 1 AND is_paid = 1`
+    );
+    stats.payments = payments.get()?.cnt as number;
+
+    const paymentsHour = this.db.prepare(
+      `SELECT COUNT(id) as cnt FROM records WHERE is_outgoing = 1 AND is_paid = 1 AND settled_at > ?`
+    );
+    stats.paymentsHour = paymentsHour.get(now() - 3600)?.cnt as number;
+
+    const wallets = this.db.prepare(
+      `SELECT COUNT(id) as cnt FROM wallets`
+    );
+    stats.wallets = wallets.get()?.cnt as number;
+
+    const walletsHour = this.db.prepare(
+      `SELECT COUNT(id) as cnt FROM wallets WHERE created_at > ?`
+    );
+    stats.walletsHour = walletsHour.get(now() - 3600)?.cnt as number;
+
+    const balance = this.db.prepare(
+      `SELECT SUM(balance) as cnt FROM wallets WHERE pubkey != ?`
+    );
+    stats.totalBalance = balance.get(servicePubkey)?.cnt as number;
+
+    const fee = this.db.prepare(
+      `SELECT SUM(fee_credit) as cnt FROM wallets`
+    );
+    stats.totalFeeCredit = fee.get()?.cnt as number;
+
+    return stats;
   }
 }

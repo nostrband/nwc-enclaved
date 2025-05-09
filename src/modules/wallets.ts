@@ -206,6 +206,7 @@ export class Wallets {
   }
 
   public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
+    if (req.clientPubkey === this.servicePubkey) throw new Error("Service pubkey can't send payments");
     const w = this.wallets.get(req.clientPubkey);
     if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
     return w.payInvoice(req);

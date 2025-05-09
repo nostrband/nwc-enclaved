@@ -1,9 +1,16 @@
-import { Event, UnsignedEvent, nip19, validateEvent, verifyEvent } from "nostr-tools";
+import {
+  Event,
+  UnsignedEvent,
+  nip19,
+  validateEvent,
+  verifyEvent,
+} from "nostr-tools";
 import { normalizeRelay, now } from "./utils";
 import { Signer } from "./abstract";
 import { Relay, Req } from "./relay";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import {
+  KIND_NOTE,
   KIND_NWC_INFO,
   KIND_PROFILE,
   KIND_RELAYS,
@@ -57,6 +64,8 @@ export async function publishServiceInfo(
     paymentFeeBase: number;
     walletFeeBase: number;
     walletFeePeriod: number;
+    open: boolean;
+    stats: any;
   },
   signer: Signer,
   nwcRelays: string[]
@@ -67,6 +76,11 @@ export async function publishServiceInfo(
     created_at: now(),
     content: "",
     tags: [
+      ["o", info.open ? "true" : "false"],
+      [
+        "comment",
+        info.open ? "Open for new wallets" : "Closed, no liquidity yet",
+      ],
       ...nwcRelays.map((r) => ["relay", r]),
       ["minSendable", "" + info.minSendable],
       ["maxSendable", "" + info.maxSendable],
@@ -154,6 +168,22 @@ ${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
   const nwcInfoEvent = await signer.signEvent(nwcInfo);
   await publish(nwcInfoEvent, nwcRelays);
   console.log("published nwc info", nwcInfoEvent, nwcRelays);
+
+  const stats: UnsignedEvent = {
+    pubkey: signer.getPublicKey(),
+    kind: KIND_NOTE,
+    created_at: now(),
+    content: `Stats:
+${Object.keys(info.stats)
+  .map((k) => `- ${k}: ${info.stats[k]}`)
+  .join("\n")}
+    `,
+    tags: [],
+  };
+
+  const statsEvent = await signer.signEvent(stats);
+  await publish(statsEvent, DEFAULT_RELAYS);
+  console.log("published stats", statsEvent, DEFAULT_RELAYS);
 }
 
 export async function fetchReplaceableEvent(pubkey: string, kind: number) {
