@@ -275,6 +275,8 @@ export class Phoenix implements IBackend {
     if (rep.status !== 200) throw new Error(err || "Failed to call " + method);
     const res = (await rep.json()) as Type;
     console.log(new Date(), "phoenixd call result", method, res);
+    const error = (res as any).reason;
+    if (error) throw new Error(error);
     return res;
   }
 

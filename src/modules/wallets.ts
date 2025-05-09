@@ -32,7 +32,6 @@ export type OnZapReceipt = (
 export class Wallets {
   private context: WalletContext;
   private wallets = new Map<string, Wallet>();
-  private servicePubkey?: string;
   private onZapReceipt?: OnZapReceipt;
   private maxBalance: number = 0;
 
@@ -41,11 +40,9 @@ export class Wallets {
   }
 
   public start(opts: {
-    servicePubkey: string;
     onZapReceipt: OnZapReceipt;
     maxBalance: number;
   }) {
-    this.servicePubkey = opts.servicePubkey;
     this.onZapReceipt = opts.onZapReceipt;
     this.maxBalance = opts.maxBalance;
 
@@ -89,10 +86,9 @@ export class Wallets {
     methods: string[];
     notifications: string[];
   }> {
-    if (!this.servicePubkey) throw new Error("No service pubkey");
     const info = await this.context.backend.getInfo();
     return {
-      alias: this.servicePubkey,
+      alias: this.context.servicePubkey,
       color: "000000",
       pubkey: info.nodeId,
       network: info.chain,
@@ -149,7 +145,7 @@ export class Wallets {
 
     // make sure there is at least one channel first,
     // service operator should topup the backend
-    if (pubkey !== this.servicePubkey) {
+    if (pubkey !== this.context.servicePubkey) {
       const info = await this.context.backend.getInfo();
       if (!info.channels.length)
         throw new Error("Service not available, no liquidity");
@@ -206,7 +202,7 @@ export class Wallets {
   }
 
   public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
-    if (req.clientPubkey === this.servicePubkey) throw new Error("Service pubkey can't send payments");
+    if (req.clientPubkey === this.context.servicePubkey) throw new Error("Service pubkey can't send payments");
     const w = this.wallets.get(req.clientPubkey);
     if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
     return w.payInvoice(req);

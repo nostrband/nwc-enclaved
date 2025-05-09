@@ -8,7 +8,6 @@ import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
 import {
-  MAX_BALANCE,
   MAX_TX_AGE,
   PAYMENT_FEE,
   PHOENIX_LIQUIDITY_FEE,
@@ -28,11 +27,13 @@ import {
 } from "./modules/nostr";
 import { now } from "./modules/utils";
 
-let servicePubkey: string;
+// read from file or generate
+const servicePrivkey = getSecretKey();
+const servicePubkey = getPublicKey(servicePrivkey);
 const db = new DB();
 const phoenix = new Phoenix();
 const fees = new PhoenixFeePolicy();
-const wallets = new Wallets({ backend: phoenix, db, fees });
+const wallets = new Wallets({ backend: phoenix, db, fees, servicePubkey });
 
 // forward NWC calls to wallets
 class Server extends NWCServer {
@@ -107,12 +108,14 @@ class Server extends NWCServer {
   }
 }
 
-async function GC() {
+async function startBackgroundJobs() {
+  // GC
   setInterval(() => {
     db.clearOldTxs(now() - MAX_TX_AGE);
     db.clearExpiredInvoices();
   }, 60000);
 
+  // wallet fee charging
   setInterval(() => {
     const pubkey = db.getNextWalletFeePubkey();
     if (pubkey) wallets.chargeWalletFee(pubkey);
@@ -129,9 +132,7 @@ export async function startWalletd({
   maxBalance: number;
 }) {
   // read or create our key
-  const servicePrivkey = getSecretKey();
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
-  servicePubkey = getPublicKey(servicePrivkey);
   console.log("servicePubkey", servicePubkey);
   console.log("maxBalance", maxBalance);
 
@@ -142,7 +143,6 @@ export async function startWalletd({
 
   // load all wallets
   wallets.start({
-    servicePubkey,
     maxBalance,
     onZapReceipt: (zapRequest: string, bolt11: string, preimage: string) => {
       publishZapReceipt(zapRequest, bolt11, preimage, serviceSigner).catch(
@@ -219,5 +219,5 @@ export async function startWalletd({
   setInterval(announce, 60000);
 
   // clear old txs, empty wallets, unpaid expired invoices etc
-  GC();
+  startBackgroundJobs();
 }

@@ -138,6 +138,7 @@ export interface IDB {
 }
 
 export interface WalletContext {
+  servicePubkey: string;
   backend: IBackend;
   db: IDB;
   fees: IFeePolicy;
