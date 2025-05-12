@@ -11,6 +11,9 @@ df
 ls -l
 ls -l /
 
+chown -R phoenix:phoenix /home/phoenix
+ls -la /home/phoenix
+
 # Run supervisor first, no programs should be running yet
 cat supervisord.conf
 ./supervisord -c supervisord.conf &
