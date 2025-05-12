@@ -16,12 +16,13 @@ export class WSClient {
 
   constructor(url: string, headers: any = {}) {
     this.url = url;
+    this.headers = headers;
     this.connect();
   }
 
   private connect() {
     this.ws = new WebSocket(this.url, {
-      headers: this.headers
+      headers: this.headers,
     });
     this.openPromise = new Promise<void>((ok) => {
       this.ws!.onopen = () => {
