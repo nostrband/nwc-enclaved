@@ -89,6 +89,7 @@ export class Wallet {
     };
   }
 
+  // NOTE: must be sync to avoid races
   public settleInvoice(invoice: NWCInvoice, p: OnIncomingPaymentEvent) {
     // prepare new state and calc miningFee
     const { newState, miningFee } = this.prepareStateSettleInvoice(

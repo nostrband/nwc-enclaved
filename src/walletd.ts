@@ -216,7 +216,7 @@ export async function startWalletd({
     );
   };
   await announce();
-  setInterval(announce, 60000);
+  setInterval(announce, 600000);
 
   // clear old txs, empty wallets, unpaid expired invoices etc
   startBackgroundJobs();

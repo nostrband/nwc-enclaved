@@ -76,5 +76,9 @@ WORKDIR /
 # copy everything
 COPY --from=build / /
 
+# volumes to be preserved across updates
+VOLUME /app/nwc-enclaved.db
+VOLUME /home/phoenix/.phoenix
+
 # Run the server
 ENTRYPOINT ["/app/run.sh"]

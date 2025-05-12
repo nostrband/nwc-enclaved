@@ -53,6 +53,7 @@ export class Wallets {
     }
   }
 
+  // NOTE: must be sync to avoid races
   public onIncomingPayment(payment: OnIncomingPaymentEvent) {
     if (!payment.externalId) {
       console.log(new Date(), "unknown incoming payment", payment);
