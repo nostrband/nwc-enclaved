@@ -17,6 +17,8 @@ import {
   KIND_SERVICE_INFO,
   NWC_SUPPORTED_METHODS,
 } from "./consts";
+import { WebSocket } from "ws";
+import { WSClient } from "./ws-client";
 
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
@@ -54,6 +56,19 @@ export async function publishNip65Relays(signer: Signer) {
   console.log("published outbox relays", event, OUTBOX_RELAYS);
 }
 
+async function fetchCerts(pubkey: string) {
+  const url = process.env["ENCLAVED_ENDPOINT"];
+  if (!url) return undefined;
+
+  const client = new WSClient(url, {
+    token: process.env["ENCLAVED_TOKEN"] || "",
+  });
+
+  const r = await client.call<{ root: Event, certs: Event[] }>("create_certificate", { pubkey })
+  console.log("certs", r);
+  return r;
+}
+
 export async function publishServiceInfo(
   info: {
     minSendable: number;
@@ -70,6 +85,8 @@ export async function publishServiceInfo(
   signer: Signer,
   nwcRelays: string[]
 ) {
+  const certs = await fetchCerts(signer.getPublicKey());
+
   const serviceInfo: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
     kind: KIND_SERVICE_INFO,
@@ -92,8 +109,13 @@ export async function publishServiceInfo(
       ["walletFeePeriod", "" + info.walletFeePeriod],
     ],
   };
+  if (certs) {
+    serviceInfo.tags.push(["tee_root", JSON.stringify(certs.root)]);
+    for (const cert of certs.certs) 
+      serviceInfo.tags.push(["tee_cert", JSON.stringify(cert)]);
+  }
 
-  switch (process.env["ENCLAVE"]) {
+  switch (process.env["ENCLAVED"]) {
     case "dev":
       serviceInfo.tags.push(["t", "dev"]);
       break;
@@ -104,8 +126,8 @@ export async function publishServiceInfo(
       serviceInfo.tags.push(["t", "debug"]);
       break;
   }
-  const dev = process.env["ENCLAVE"] === "dev";
-  const prod = process.env["ENCLAVE"] === "prod";
+  const dev = process.env["ENCLAVED"] === "dev";
+  const prod = process.env["ENCLAVED"] === "prod";
   const debug = !dev && !prod;
 
   const serviceEvent = await signer.signEvent(serviceInfo);
