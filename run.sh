@@ -8,11 +8,12 @@ cd /app
 pwd
 free
 df
-ls -l
-ls -l /
+ls -la
+ls -la data/
+ls -la /
 
 chown -R phoenix:phoenix /home/phoenix
-ls -la /home/phoenix
+ls -la /home/phoenix/.phoenix
 
 # Run supervisor first, no programs should be running yet
 cat supervisord.conf
