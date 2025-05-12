@@ -18,7 +18,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     bash=5.1-6ubuntu1.1 \
     wget=1.21.2-2ubuntu1.1 \
     unzip=6.0-26ubuntu3.2 \
-    nodejs=23.11.0-1nodesource1
+    nodejs=24.0.1-1nodesource1
 
 #RUN apt show nodejs
 RUN apt clean 
