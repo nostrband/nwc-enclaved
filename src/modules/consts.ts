@@ -10,7 +10,7 @@ export const KIND_NWC_NOTIFICATION = 23196;
 
 export const PHOENIX_PORT = 9740;
 
-export const HOME_PATH = "./";
+export const HOME_PATH = "./data/";
 export const DB_PATH = `${HOME_PATH}nwc-enclaved.db`;
 
 export const PHOENIX_LIQUIDITY_FEE = 0.01;

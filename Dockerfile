@@ -77,8 +77,8 @@ WORKDIR /
 COPY --from=build / /
 
 # volumes to be preserved across updates
-VOLUME /app/nwc-enclaved.db
-VOLUME /home/phoenix/.phoenix
+VOLUME /app/data/
+VOLUME /home/phoenix/.phoenix/
 
 # Run the server
 ENTRYPOINT ["/app/run.sh"]
