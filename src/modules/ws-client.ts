@@ -47,7 +47,7 @@ export class WSClient {
       this.onEvent(p.event);
     } else {
       const { id, result, error } = p;
-      console.log("reply", { id, result, error });
+      console.log("reply", { id, result: JSON.stringify(result), error });
 
       const cbs = this.pending.get(id);
       if (!cbs) return;
@@ -85,6 +85,6 @@ export class WSClient {
 
   public async call<T>(method: string, params: any, timeout = 10000) {
     const r = await this.send(method, params, timeout);
-    return JSON.parse(r) as T;
+    return r as T;
   }
 }
