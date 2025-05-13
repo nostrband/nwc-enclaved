@@ -77,8 +77,8 @@ help Bitcoin and LN get adoption as a currency.
 - [x] abuse protection: tx history size
 - [x] abuse protection: fees for holding to protect against dormant small-balance wallets
 - [x] abuse protection: fees for payments to earn revenue on non-holding wallets
-- [x] custom relay with proper DDoS protections and settings (NWClay at relay.zap.land)
 - [x] privacy and security: open-source, reproducible, deployable in TEE
+- [ ] custom relay with proper DDoS protections and settings
 - [ ] abuse protection: GC of emptied wallets
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
 - [ ] telemetry for transparency
