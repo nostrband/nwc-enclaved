@@ -266,6 +266,7 @@ export class Wallet {
 
     // amount we're locking for this payment
     const lockAmount = invoice.amount + feeEstimate;
+    console.log("payment amount", invoice.amount, "feeEstimate", feeEstimate);
 
     // =======================================
     // NOTE: this section must be **sync**
