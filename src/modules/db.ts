@@ -317,7 +317,7 @@ export class DB implements IDB {
       anon ? 1 : 0,
       id
     );
-    if (r.changes !== 1) throw new Error("Invoice not found by id");
+    if (r.changes !== 1) throw new Error("Invoice not found by id " + id);
   }
 
   public getInvoiceInfo({
