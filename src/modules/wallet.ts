@@ -64,10 +64,15 @@ export class Wallet {
       // payment received by service itself
       const isService = this.pubkey === this.context.servicePubkey;
 
-      console.log("settle invoice", { noLiquidity, isService, miningFeePaid: this.context.fees.getMiningFeePaid() });
+      console.log("settle invoice", {
+        noLiquidity,
+        isService,
+        firstLiquidityPayment: p.firstLiquidityPayment,
+        miningFeePaid: this.context.fees.getMiningFeePaid(),
+      });
 
       // no liquidity or just bought it?
-      if (!noLiquidity) {
+      if (noLiquidity) {
         if (!isService)
           throw new Error("Payment to non-service pubkey without liquidity");
         // without any channels the initial payments go to

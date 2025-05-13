@@ -39,10 +39,7 @@ export class Wallets {
     this.context = context;
   }
 
-  public start(opts: {
-    onZapReceipt: OnZapReceipt;
-    maxBalance: number;
-  }) {
+  public start(opts: { onZapReceipt: OnZapReceipt; maxBalance: number }) {
     this.onZapReceipt = opts.onZapReceipt;
     this.maxBalance = opts.maxBalance;
 
@@ -141,12 +138,17 @@ export class Wallets {
   ): Promise<NWCInvoice> {
     if (req.amount < 1000 || req.amount % 1000 > 0)
       throw new Error("Only sat payments are supported");
-    if (req.amount > this.maxBalance)
-      throw new Error("Max invoice size exceeded");
+
+    const isService = pubkey === this.context.servicePubkey;
+    // limit invoice size
+    if (!isService) {
+      if (req.amount > this.maxBalance)
+        throw new Error("Max invoice size exceeded");
+    }
 
     // make sure there is at least one channel first,
     // service operator should topup the backend
-    if (pubkey !== this.context.servicePubkey) {
+    if (!isService) {
       const info = await this.context.backend.getInfo();
       if (!info.channels.length)
         throw new Error("Service not available, no liquidity");
@@ -160,8 +162,10 @@ export class Wallets {
       throw new Error("No new wallets allowed");
 
     // limit total balance
-    if (w && w.getState().balance + req.amount > this.maxBalance)
-      throw new Error("Wallet balance would exceed max balance");
+    if (!isService) {
+      if (w && w.getState().balance + req.amount > this.maxBalance)
+        throw new Error("Wallet balance would exceed max balance");
+    }
 
     // max unpaid invoices
     const counts = this.context.db.countUnpaidInvoices();
@@ -203,7 +207,8 @@ export class Wallets {
   }
 
   public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
-    if (req.clientPubkey === this.context.servicePubkey) throw new Error("Service pubkey can't send payments");
+    if (req.clientPubkey === this.context.servicePubkey)
+      throw new Error("Service pubkey can't send payments");
     const w = this.wallets.get(req.clientPubkey);
     if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
     return w.payInvoice(req);
