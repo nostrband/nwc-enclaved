@@ -56,10 +56,15 @@ export class Wallets {
       console.log(new Date(), "unknown incoming payment", payment);
       return;
     }
-    const { clientPubkey, invoice, zapRequest } =
+    const { clientPubkey, invoice, isPaid, zapRequest } =
       this.context.db.getInvoiceInfo({ id: payment.externalId! }) || {};
     if (!clientPubkey || !invoice) {
       console.log("skip unknown invoice", payment.externalId);
+      return;
+    }
+
+    if (isPaid) {
+      console.log("skip settled invoice", payment.externalId);
       return;
     }
 

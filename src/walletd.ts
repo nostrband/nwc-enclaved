@@ -138,6 +138,7 @@ export async function startWalletd({
 
   // fetch global mining fee state
   const feeState = db.getFees();
+  console.log("feeState", feeState);
   fees.addMiningFeePaid(feeState.miningFeePaid);
   fees.addMiningFeeReceived(feeState.miningFeeReceived);
 

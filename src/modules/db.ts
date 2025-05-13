@@ -357,6 +357,7 @@ export class DB implements IDB {
     return {
       invoice,
       id: r.id as string,
+      isPaid: !!r.is_paid,
       clientPubkey: r.pubkey as string,
       preimage: tx.preimage!,
       zapRequest: (r.zap_request as string) || "",
@@ -373,10 +374,14 @@ export class DB implements IDB {
     this.db.exec("BEGIN TRANSACTION");
 
     try {
-      const { id, clientPubkey: expectedPubkey } =
-        this.getInvoiceInfo({ paymentHash: payment.paymentHash }) || {};
+      const {
+        id,
+        isPaid,
+        clientPubkey: expectedPubkey,
+      } = this.getInvoiceInfo({ paymentHash: payment.paymentHash }) || {};
       if (expectedPubkey !== clientPubkey)
         throw new Error("Invalid clientPubkey for settleInvoice");
+      if (isPaid) throw new Error("Invoice already settled");
 
       // update invoice state
       const update = this.db.prepare(`
@@ -635,9 +640,7 @@ export class DB implements IDB {
     );
     stats.paymentsHour = paymentsHour.get(now() - 3600)?.cnt as number;
 
-    const wallets = this.db.prepare(
-      `SELECT COUNT(id) as cnt FROM wallets`
-    );
+    const wallets = this.db.prepare(`SELECT COUNT(id) as cnt FROM wallets`);
     stats.wallets = wallets.get()?.cnt as number;
 
     const walletsHour = this.db.prepare(

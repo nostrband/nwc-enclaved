@@ -94,6 +94,7 @@ export interface InvoiceInfo {
   id: string;
   invoice: NWCInvoice;
   preimage: string;
+  isPaid: boolean;
   zapRequest?: string;
 }
 
