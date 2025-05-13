@@ -15,7 +15,11 @@ import {
   WalletContext,
   WalletState,
 } from "./abstract";
-import { MAX_CONCURRENT_PAYMENTS_PER_WALLET, PAYMENT_FEE, WALLET_FEE } from "./consts";
+import {
+  MAX_CONCURRENT_PAYMENTS_PER_WALLET,
+  PAYMENT_FEE,
+  WALLET_FEE,
+} from "./consts";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 
@@ -43,34 +47,72 @@ export class Wallet {
     return this.pubkey;
   }
 
-  private prepareStateSettleInvoice(amount: number) {
+  private prepareStateSettleInvoice(amount: number, p: OnIncomingPaymentEvent) {
     const newState = { ...this.state };
 
     // always put the full received amount on the balance
-    newState.balance = this.state.balance + amount;
+    newState.balance += amount;
 
     // we might need to pay some mining fees for auto-liquidity
     let miningFee = 0;
 
     // need to extend our virtual channel?
-    if (newState.balance > this.state.channelSize) {
+    if (newState.balance > newState.channelSize) {
+      // no liquidity?
+      const noLiquidity = !this.context.fees.getMiningFeePaid();
+
+      // payment received by service itself
+      const isService = this.pubkey === this.context.servicePubkey;
+
+      console.log("settle invoice", { noLiquidity, isService, miningFeePaid: this.context.fees.getMiningFeePaid() });
+
+      // no liquidity or just bought it?
+      if (!noLiquidity) {
+        if (!isService)
+          throw new Error("Payment to non-service pubkey without liquidity");
+        // without any channels the initial payments go to
+        // the servicePubkey's wallet and are fully billed as feeCredit
+        miningFee = amount;
+        newState.feeCredit += miningFee;
+        newState.channelSize = newState.feeCredit;
+      } else if (p.firstLiquidityPayment) {
+        if (!isService)
+          throw new Error("Payment to non-service pubkey without liquidity");
+
+        // newly paid piece of mining fee is 'first channel' - previously accumulated credit
+        miningFee = this.context.fees.getMiningFeePaid() - newState.feeCredit;
+
+        // set the full payment for the first liquidity piece
+        // to service pubkey's fee credit
+        newState.feeCredit = this.context.fees.getMiningFeePaid();
+
+        // set wallet's channel size to exactly feeCredit,
+        // from now on the service wallet will be billed normally like other
+        // wallets
+        newState.channelSize = newState.feeCredit;
+      }
+
       // extend virtual channel by a round number of sats
       const channelExtensionAmount =
-        Math.ceil((newState.balance - this.state.channelSize) / 1000) * 1000;
+        Math.ceil((newState.balance - newState.channelSize) / 1000) * 1000;
 
       // set new size
       newState.channelSize += channelExtensionAmount;
 
-      // auto-liquidity service fee
-      newState.feeCredit += Math.ceil(
-        channelExtensionAmount * this.context.fees.getLiquidityServiceFeeRate()
-      );
+      // might be 0 on the first liquidity event
+      if (channelExtensionAmount > 0) {
+        // auto-liquidity service fee
+        newState.feeCredit += Math.ceil(
+          channelExtensionAmount *
+            this.context.fees.getLiquidityServiceFeeRate()
+        );
 
-      // calc mining fee separately to return it to caller
-      miningFee = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
+        // calc mining fee separately to return it to caller
+        miningFee = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
 
-      // add mining fee to wallet's fee credit
-      newState.feeCredit += miningFee;
+        // add mining fee to wallet's fee credit
+        newState.feeCredit += miningFee;
+      }
     }
 
     return { newState, miningFee };
@@ -93,7 +135,8 @@ export class Wallet {
   public settleInvoice(invoice: NWCInvoice, p: OnIncomingPaymentEvent) {
     // prepare new state and calc miningFee
     const { newState, miningFee } = this.prepareStateSettleInvoice(
-      invoice.amount
+      invoice.amount,
+      p
     );
     console.log("prepareStateSettleInvoice", { newState, miningFee });
 
@@ -303,7 +346,7 @@ export class Wallet {
       // result
       return {
         preimage: r.preimage,
-        fees_paid: totalFee
+        fees_paid: totalFee,
       };
     } catch (e) {
       // cleanup on error

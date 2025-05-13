@@ -135,17 +135,19 @@ export class DB implements IDB {
     };
   }
 
-  public getNextWalletFeePubkey(): string | undefined {
+  public getNextWalletFeePubkey(servicePubkey: string): string | undefined {
     const select = this.db.prepare(`
       SELECT pubkey FROM wallets
       WHERE
         balance > fee_credit
       AND
         next_wallet_fee_at < ?
+      AND
+        pubkey != ?
       ORDER BY next_wallet_fee_at ASC
       LIMIT 1
     `);
-    const rec = select.get(now());
+    const rec = select.get(now(), servicePubkey);
     return rec?.pubkey as string;
   }
 

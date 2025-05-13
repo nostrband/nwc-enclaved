@@ -18,6 +18,7 @@ export interface OnIncomingPaymentEvent {
   preimage: string;
   settledAt: number;
   externalId?: string;
+  firstLiquidityPayment: boolean;
 }
 
 export interface RouteHop {
@@ -34,11 +35,14 @@ export interface IFeePolicy {
   // how much we'll charge to cover our mining fees paid
   calcMiningFeeMsat(channelExtensionAmount: number): number;
 
-  // when we take our fee on outgoing payment
+  // when we reserve mining fee on incoming payments
   addMiningFeeReceived(amount: number): void;
 
   // when we're charged on new liquidity by Phoenix
   addMiningFeePaid(amount: number): void;
+
+  // getter
+  getMiningFeePaid(): number;
 
   // estimate before making a payment
   estimatePaymentFeeMsat(
@@ -79,6 +83,7 @@ export interface BackendInfo {
 
 export interface IBackend {
   getInfo(): Promise<BackendInfo>;
+  getInfoSync(): BackendInfo | undefined;
   makeInvoice(id: string, req: MakeInvoiceBackendReq): Promise<NWCInvoice>;
   payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult>;
   syncPaymentsSince(fromSec: number): Promise<void>;
@@ -100,7 +105,7 @@ export interface IDB {
   }[];
   clearOldTxs(until: number): void;
   clearExpiredInvoices(): void;
-  getNextWalletFeePubkey(): string | undefined;
+  getNextWalletFeePubkey(servicePubkey: string): string | undefined;
   chargeWalletFee(pubkey: string): void;
   countUnpaidInvoices(): { anons: number; wallets: number };
   createInvoice(clientPubkey: string): string;
@@ -149,7 +154,8 @@ export type OnMiningFeeEstimate = (
   miningFee: number,
   serviceFee: number
 ) => void;
-export type OnLiquidityFee = (fee: number) => Promise<void>;
+// returns true if this is the first paid fee
+export type OnLiquidityFee = (fee: number) => Promise<boolean>;
 
 export interface Signer {
   getPublicKey(): string;

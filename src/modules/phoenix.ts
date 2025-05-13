@@ -152,9 +152,13 @@ export class Phoenix implements IBackend {
 
   private async processIncomingPayment(p: IncomingPayment) {
     try {
-      // first take paid liquidity fees into account
+      let firstLiquidityPayment = false;
       if (p.fees) {
-        await this.onLiquidityFee!(p.fees);
+        // update channel info has changed
+        await this.getBackendInfo();
+
+        // notify client
+        firstLiquidityPayment = await this.onLiquidityFee!(p.fees);
       }
 
       // next pass the payment
@@ -163,6 +167,7 @@ export class Phoenix implements IBackend {
         preimage: p.preimage,
         settledAt: Math.round(p.completedAt / 1000),
         externalId: p.externalId,
+        firstLiquidityPayment,
       });
     } catch (e) {
       console.error(new Date(), "error processing incoming payment", p, e);
@@ -281,7 +286,14 @@ export class Phoenix implements IBackend {
   }
 
   private async getBackendInfo() {
-    return this.call<BackendInfo>("GET", "getinfo", {});
+    this.info = await this.call<BackendInfo>("GET", "getinfo", {});
+    // cache for 1 minute to have blockheight updated eventually
+    setTimeout(() => (this.info = undefined), 60000);
+    return this.info;
+  }
+
+  public getInfoSync(): BackendInfo | undefined {
+    return this.info;
   }
 
   public getInfo(): Promise<BackendInfo> {

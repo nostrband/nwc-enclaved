@@ -117,7 +117,7 @@ async function startBackgroundJobs() {
 
   // wallet fee charging
   setInterval(() => {
-    const pubkey = db.getNextWalletFeePubkey();
+    const pubkey = db.getNextWalletFeePubkey(servicePubkey);
     if (pubkey) wallets.chargeWalletFee(pubkey);
   }, 1000);
 }
@@ -162,7 +162,9 @@ export async function startWalletd({
     onMiningFeeEstimate: (miningFee: number) =>
       fees.setMiningFeeEstimate(miningFee),
     onLiquidityFee: async (fee: number) => {
+      const oldFees = fees.getMiningFeePaid();
       fees.addMiningFeePaid(fee);
+      return !oldFees; // true if haven't paid fees before
     },
   });
 
