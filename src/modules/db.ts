@@ -651,9 +651,9 @@ export class DB implements IDB {
     stats.totalBalance = balance.get(servicePubkey)?.cnt as number;
 
     const fee = this.db.prepare(
-      `SELECT SUM(fee_credit) as cnt FROM wallets`
+      `SELECT SUM(fee_credit) as cnt FROM wallets WHERE pubkey != ?`
     );
-    stats.totalFeeCredit = fee.get()?.cnt as number;
+    stats.totalFeeCredit = fee.get(servicePubkey)?.cnt as number;
 
     return stats;
   }

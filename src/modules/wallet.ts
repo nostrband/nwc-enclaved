@@ -113,10 +113,14 @@ export class Wallet {
         );
 
         // calc mining fee separately to return it to caller
-        miningFee = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
+        const miningFeeLeft = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
 
         // add mining fee to wallet's fee credit
-        newState.feeCredit += miningFee;
+        newState.feeCredit += miningFeeLeft;
+
+        // add the leftover mining fee to one potentially
+        // paid for initial liquidity
+        miningFee += miningFeeLeft;
       }
     }
 

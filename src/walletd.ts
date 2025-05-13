@@ -164,6 +164,7 @@ export async function startWalletd({
     onLiquidityFee: async (fee: number) => {
       const oldFees = fees.getMiningFeePaid();
       fees.addMiningFeePaid(fee);
+      db.addMiningFeePaid(fee);
       return !oldFees; // true if haven't paid fees before
     },
   });
