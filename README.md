@@ -77,12 +77,12 @@ help Bitcoin and LN get adoption as a currency.
 - [x] abuse protection: tx history size
 - [x] abuse protection: fees for holding to protect against dormant small-balance wallets
 - [x] abuse protection: fees for payments to earn revenue on non-holding wallets
+- [x] custom relay with proper DDoS protections and settings (NWClay at relay.zap.land)
+- [x] privacy and security: open-source, reproducible, deployable in TEE
 - [ ] abuse protection: GC of emptied wallets
-- [ ] privacy and security: open-source, reproducible, deployable in TEE
-- [ ] custom relay with proper DDoS protections and settings
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
 - [ ] telemetry for transparency
-- [ ] internal payments without LN routing fees (LATER)
+- [ ] internal payments without LN routing fees
 - [ ] abuse protection: small fee for internal payments
 
 ## Non-goals
@@ -181,12 +181,33 @@ phoenix node first to create at least one channel, otherwise all initial wallets
 will not be able to pay from their seemingly non-empty balance. `nwc-enclaved` will not create invoices
 until there is at least one channel created on the backend.
 
-## Examples
+## Client library
 
-TBD:
+The simplest way to use the wallet is through a client library [`nwc-enclaved-utils`](https://github.com/nostrband/nwc-enclaved-utils) which helps
+you discover wallet services, create a wallet and get NWC string and LN address, and also can publish
+a Nostr profile with your LN address. 
 
-- Getting an invoice for your wallet.
-- Getting LUD16 address for nostr profile.
-- Sending a zap.
-- Managing your wallet.
+## TEE Attestation
+
+Attestation information is included in `kind:13196` tags as `tee_root` and `tee_cert` tags, verification
+can be done using [`nostr-enclaves`](https://github.com/nostrband/nostr-enclaves) library. The client
+library mentioned above uses `nostr-enclaves` to validate attestation of discovered instances and only
+suggest valid ones.
+
+## Building
+
+To build and check the image hashes run:
+
+```
+./build-docker.sh
+```
+
+After the build is finished, compare the hashes to ones listed in `docker.json`.
+
+## Important Notice
+
+THIS PROJECT IS UNDER ACTIVE DEVELOPMENT, USE AT YOUR OWN RISK.
+
+## TBD
+
 - add ["encryption", "nip44_v2"] and migrate to NIP-44

@@ -1,0 +1,17 @@
+{
+  "containerimage.config.digest": "sha256:df023c963c9dd82e9670c6fff50867ef787faaecc52586cd374b9a44e499615e",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+    "digest": "sha256:f495a82e5f4c81ae8333ad4fd8217d627c97a0b024a8071d42f1dc54f3385145",
+    "size": 1490,
+    "annotations": {
+      "org.opencontainers.image.created": "2025-04-29T12:28:34Z"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:f495a82e5f4c81ae8333ad4fd8217d627c97a0b024a8071d42f1dc54f3385145",
+  "image.name": "docker.io/library/nwc-enclaved:latest"
+}
