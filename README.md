@@ -99,6 +99,12 @@ help Bitcoin and LN get adoption as a currency.
 - self-sustainable, full-reserves, pays for itself
 - secure and private, reproducible builds
 
+## Deployment in TEE
+
+This project is designed to be deployed inside [`enclaved`](https://github.com/nostrband/enclaved/) application
+server for AWS Nitro Enclaves. Basically, `nwc-enclaved` provides a reproducible Docker container and 
+uses `enclaved` server's internal API to get the attestation. 
+
 ## LN Node
 
 The LN node used as the basis is [phoenixd](https://phoenix.acinq.co/), which provides fully-automatic
