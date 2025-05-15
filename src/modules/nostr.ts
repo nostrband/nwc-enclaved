@@ -56,7 +56,7 @@ export async function publishNip65Relays(signer: Signer) {
   console.log("published outbox relays", event, OUTBOX_RELAYS);
 }
 
-async function fetchCerts(pubkey: string) {
+export async function fetchCerts(pubkey: string) {
   const url = process.env["ENCLAVED_ENDPOINT"];
   if (!url) return undefined;
 

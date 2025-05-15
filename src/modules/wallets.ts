@@ -20,6 +20,8 @@ import {
   NWCPaymentResult,
   NWCTransaction,
   NWC_RATE_LIMITED,
+  NWCLookupInvoiceReq,
+  NWC_NOT_FOUND,
 } from "./nwc-types";
 import { Wallet } from "./wallet";
 
@@ -33,21 +35,34 @@ export class Wallets {
   private context: WalletContext;
   private wallets = new Map<string, Wallet>();
   private onZapReceipt?: OnZapReceipt;
+  private adminPubkey?: string;
   private maxBalance: number = 0;
+  private allowedPubkeys = new Set<string>();
 
   constructor(context: WalletContext) {
     this.context = context;
   }
 
-  public start(opts: { onZapReceipt: OnZapReceipt; maxBalance: number }) {
+  public start(opts: {
+    onZapReceipt: OnZapReceipt;
+    adminPubkey?: string;
+    maxBalance: number;
+  }) {
     this.onZapReceipt = opts.onZapReceipt;
     this.maxBalance = opts.maxBalance;
+    this.adminPubkey = opts.adminPubkey;
 
     const wallets = this.context.db.listWallets();
     for (const w of wallets) {
       this.wallets.set(w.pubkey, new Wallet(w.pubkey, this.context, w.state));
       console.log("wallet state", w.pubkey, JSON.stringify(w.state));
     }
+  }
+
+  public addPubkey(req: { clientPubkey: string; targetPubkey: string }) {
+    if (!this.adminPubkey) throw new Error("Not supported");
+    if (this.adminPubkey !== req.clientPubkey) throw new Error("Disallowed");
+    this.allowedPubkeys.add(req.clientPubkey);
   }
 
   // NOTE: must be sync to avoid races
@@ -120,6 +135,12 @@ export class Wallets {
         });
   }
 
+  public lookupInvoice(req: NWCLookupInvoiceReq): Promise<NWCTransaction> {
+    const tx = this.context.db.lookupInvoice(req);
+    if (!tx) throw new Error(NWC_NOT_FOUND);
+    return Promise.resolve(tx);
+  }
+
   public listTransactions(req: NWCListTransactionsReq): Promise<{
     transactions: NWCTransaction[];
   }> {
@@ -141,6 +162,11 @@ export class Wallets {
     pubkey: string,
     zapRequest?: string
   ): Promise<NWCInvoice> {
+    // only make invoices for allowed pubkeys
+    if (this.adminPubkey && !this.allowedPubkeys.has(pubkey))
+      throw new Error("Disallowed");
+
+    // only rounded sats payments
     if (req.amount < 1000 || req.amount % 1000 > 0)
       throw new Error("Only sat payments are supported");
 

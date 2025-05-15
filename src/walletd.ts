@@ -20,6 +20,7 @@ import { Signer } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
 import {
+  fetchCerts,
   isValidZapRequest,
   publishNip65Relays,
   publishServiceInfo,
@@ -41,6 +42,13 @@ class Server extends NWCServer {
     super(signer);
   }
 
+  protected async addPubkey(req: NWCRequest, res: NWCReply): Promise<void> {
+    res.result = wallets.addPubkey({
+      ...req.params,
+      clientPubkey: req.clientPubkey,
+    });
+  }
+
   protected async getBalance(req: NWCRequest, res: NWCReply): Promise<void> {
     res.result = await wallets.getBalance(req.clientPubkey);
   }
@@ -54,6 +62,13 @@ class Server extends NWCServer {
     res: NWCReply
   ): Promise<void> {
     res.result = await wallets.listTransactions({
+      ...req.params,
+      clientPubkey: req.clientPubkey,
+    });
+  }
+
+  protected async lookupInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
+    res.result = await wallets.lookupInvoice({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
@@ -126,10 +141,12 @@ export async function startWalletd({
   relayUrl,
   phoenixPassword,
   maxBalance,
+  enclavedInternalWallet,
 }: {
   relayUrl: string;
   phoenixPassword: string;
   maxBalance: number;
+  enclavedInternalWallet?: boolean;
 }) {
   // read or create our key
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
@@ -142,9 +159,17 @@ export async function startWalletd({
   fees.addMiningFeePaid(feeState.miningFeePaid);
   fees.addMiningFeeReceived(feeState.miningFeeReceived);
 
+  let adminPubkey: string | undefined;
+  if (enclavedInternalWallet) {
+    adminPubkey = (await fetchCerts(servicePubkey))?.root.pubkey;
+    if (!adminPubkey) throw new Error("Failed to get enclaved admin pubkey");
+    console.log("enclaved parent pubkey", adminPubkey);
+  }
+
   // load all wallets
   wallets.start({
     maxBalance,
+    adminPubkey,
     onZapReceipt: (zapRequest: string, bolt11: string, preimage: string) => {
       publishZapReceipt(zapRequest, bolt11, preimage, serviceSigner).catch(
         (e) => {

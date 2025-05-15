@@ -4,6 +4,7 @@
 export const NWC_INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
 export const NWC_PAYMENT_FAILED = "PAYMENT_FAILED";
 export const NWC_RATE_LIMITED = "RATE_LIMITED";
+export const NWC_NOT_FOUND = "NOT_FOUND";
 
 export type NWCErrorCode =
   | "INSUFFICIENT_BALANCE"
@@ -59,6 +60,12 @@ export interface NWCTransaction {
   expires_at?: number;
   settled_at?: number;
   metadata: any;
+}
+
+export interface NWCLookupInvoiceReq {
+  // one or the other is required
+  payment_hash?: string;
+  invoice?: string;
 }
 
 export interface MakeInvoiceReq {

@@ -117,6 +117,10 @@ export interface IDB {
     zapRequest?: string,
     anon?: boolean
   ): void;
+  lookupInvoice(opt: {
+    paymentHash?: string;
+    invoice?: string;
+  }): NWCTransaction | undefined;
   getInvoiceInfo(opt: {
     id?: string;
     paymentHash?: string;

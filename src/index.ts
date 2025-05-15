@@ -10,4 +10,5 @@ console.log("env", process.env);
 const phoenixPassword = process.argv[2];
 const relayUrl = process.argv?.[3] || "wss://relay.zap.land";
 const maxBalance = Number(process.env["MAX_BALANCE"]) || MAX_BALANCE;
-startWalletd({ relayUrl, phoenixPassword, maxBalance });
+const enclavedInternalWallet = process.env["ENCLAVED_INTERNAL_WALLET"] === 'true';
+startWalletd({ relayUrl, phoenixPassword, maxBalance, enclavedInternalWallet });

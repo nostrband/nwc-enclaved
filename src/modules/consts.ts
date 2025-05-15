@@ -36,6 +36,7 @@ export const NWC_SUPPORTED_METHODS = [
   "pay_invoice",
   "make_invoice",
   "make_invoice_for",
+  "lookup_invoice",
   "list_transactions",
   "get_balance",
   "get_info",

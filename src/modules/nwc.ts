@@ -20,6 +20,10 @@ export class NWCServer {
     return this.signer;
   }
 
+  protected async addPubkey(req: NWCRequest, res: NWCReply) {
+    throw new Error("Method not implemented");
+  }
+
   protected async payInvoice(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
@@ -36,6 +40,10 @@ export class NWCServer {
     throw new Error("Method not implemented");
   }
 
+  protected async lookupInvoice(req: NWCRequest, res: NWCReply) {
+    throw new Error("Method not implemented");
+  }
+
   protected async getBalance(req: NWCRequest, res: NWCReply) {
     throw new Error("Method not implemented");
   }
@@ -46,12 +54,16 @@ export class NWCServer {
 
   private async handle(req: NWCRequest, res: NWCReply) {
     switch (req.method) {
+      case "add_pubkey":
+        return this.addPubkey(req, res);
       case "pay_invoice":
         return this.payInvoice(req, res);
       case "make_invoice":
         return this.makeInvoice(req, res);
       case "make_invoice_for":
         return this.makeInvoiceFor(req, res);
+      case "lookup_invoice":
+        return this.lookupInvoice(req, res);
       case "list_transactions":
         return this.listTransactions(req, res);
       case "get_balance":
@@ -74,6 +86,12 @@ export class NWCServer {
     }
 
     switch (req.method) {
+      case "get_balance":
+        valid =
+          !!req.params.pubkey &&
+          typeof req.params.pubkey === "string" &&
+          req.params.pubkey.length === 64;
+        break;
       case "pay_invoice":
         valid = !!req.params.invoice && typeof req.params.invoice === "string";
         break;
@@ -87,6 +105,12 @@ export class NWCServer {
           !!req.params.pubkey &&
           typeof req.params.pubkey === "string" &&
           req.params.pubkey.length === 64;
+        break;
+      case "lookup_invoice":
+        valid =
+          (!!req.params.payment_hash &&
+            typeof req.params.payment_hash === "string") ||
+          (!!req.params.invoice && typeof req.params.invoice === "string");
         break;
       case "list_transactions":
         valid = true;
@@ -165,7 +189,7 @@ export class NWCServer {
 
     console.log(new Date(), "nwc reply", res);
     return this.signer.signEvent({
-      pubkey: await this.signer.getPublicKey(),
+      pubkey: this.signer.getPublicKey(),
       kind: KIND_NWC_REPLY,
       created_at: now(),
       tags: [

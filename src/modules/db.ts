@@ -320,6 +320,34 @@ export class DB implements IDB {
     if (r.changes !== 1) throw new Error("Invoice not found by id " + id);
   }
 
+  public lookupInvoice(opt: {
+    paymentHash?: string;
+    invoice?: string;
+  }): NWCTransaction | undefined {
+    if (!opt.paymentHash && !opt.invoice) throw new Error("Invalid params");
+    const sql = opt.invoice
+      ? `
+      SELECT * FROM records
+      WHERE
+        invoice = ?
+      AND
+        is_outgoing = 0
+      `
+      : `
+      SELECT * FROM records
+      WHERE
+        payment_hash = ?
+      AND
+        is_outgoing = 0
+    `;
+    const select = this.db.prepare(sql);
+    const r = select.get(opt.invoice ? opt.invoice : opt.paymentHash!);
+    if (!r) return undefined;
+    const tx = this.recToTx(r);
+    if (tx.type === "outgoing") throw new Error("Invalid type");
+    return tx;
+  }
+
   public getInvoiceInfo({
     id,
     paymentHash,
