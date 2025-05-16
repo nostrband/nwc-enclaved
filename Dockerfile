@@ -28,8 +28,8 @@ RUN apt clean
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
 
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
-RUN nvm install 24.0.1
-RUN nvm use 24.0.1
+RUN export NVM_DIR="$HOME/.nvm" [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+RUN nvm install 24.0.1 && nvm use 24.0.1
 
 
 # phoenix as separate user, it crashes if launched
