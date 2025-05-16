@@ -9,20 +9,28 @@ WORKDIR /app
 RUN echo "Timestamp" ${SOURCE_DATE_EPOCH}
 
 # nodejs package sources
-COPY ./nodesource_setup.sh .
-RUN ./nodesource_setup.sh && rm ./nodesource_setup.sh
+#COPY ./nodesource_setup.sh .
+#RUN ./nodesource_setup.sh && rm ./nodesource_setup.sh
+#RUN wget https://github.com/nodejs/node/archive/refs/tags/v24.0.2.tar.gz
 
 # install stuff w/ specific versions
 RUN DEBIAN_FRONTEND=noninteractive apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     bash=5.1-6ubuntu1.1 \
     wget=1.21.2-2ubuntu1.1 \
-    unzip=6.0-26ubuntu3.2 \
-    nodejs=24.0.1-1nodesource1
+    unzip=6.0-26ubuntu3.2
+
+
+#    nodejs=24.0.1-1nodesource1
 
 #RUN apt show nodejs
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
+
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+RUN nvm install 24.0.1
+RUN nvm use 24.0.1
+
 
 # phoenix as separate user, it crashes if launched
 # as root in our setup
