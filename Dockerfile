@@ -8,29 +8,17 @@ WORKDIR /app
 
 RUN echo "Timestamp" ${SOURCE_DATE_EPOCH}
 
-# nodejs package sources
-#COPY ./nodesource_setup.sh .
-#RUN ./nodesource_setup.sh && rm ./nodesource_setup.sh
-#RUN wget https://github.com/nodejs/node/archive/refs/tags/v24.0.2.tar.gz
-
 # install stuff w/ specific versions
 RUN DEBIAN_FRONTEND=noninteractive apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     bash=5.1-6ubuntu1.1 \
     wget=1.21.2-2ubuntu1.1 \
-    unzip=6.0-26ubuntu3.2
+    unzip=6.0-26ubuntu3.2 \
+    xz-utils=5.2.5-2ubuntu1
 
-
-#    nodejs=24.0.1-1nodesource1
-
-#RUN apt show nodejs
+#RUN apt show xz-utils
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
-
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
-RUN export NVM_DIR="$HOME/.nvm" [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-RUN nvm install 24.0.1 && nvm use 24.0.1
-
 
 # phoenix as separate user, it crashes if launched
 # as root in our setup
@@ -44,6 +32,11 @@ RUN chown -R phoenix:phoenix *
 
 # other binaries
 WORKDIR /app
+
+# nodejs
+RUN wget https://nodejs.org/dist/v24.0.1/node-v24.0.1-linux-x64.tar.xz
+RUN sha256sum node-v24.0.1-linux-x64.tar.xz | grep 12d8b7c7dd9191bd4f3afe872c7d4908ac75d2a6ef06d2ae59c0b4aa384bc875
+RUN tar -xJf node-v24.0.1-linux-x64.tar.xz -C /usr/local --strip-components=1 && rm node-v24.0.1-linux-x64.tar.xz
 
 # supervisord
 RUN wget https://github.com/ochinchina/supervisord/releases/download/v0.7.3/supervisord_0.7.3_Linux_64-bit.tar.gz
