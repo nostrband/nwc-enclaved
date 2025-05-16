@@ -81,16 +81,19 @@ export class Wallet {
       if (!isService)
         throw new Error("Payment to non-service pubkey without liquidity");
 
-      // newly paid piece of mining fee is 'first channel' - previously accumulated credit
+      // we might have already made some first incoming payments without
+      // liquidity (those are in feeCredit), now that we've finally bought 
+      // liquidity the current payment's miningFee is paid-feeCredit
       miningFee = this.context.fees.getMiningFeePaid() - newState.feeCredit;
 
       // set the full payment for the first liquidity piece
       // to service pubkey's fee credit
       newState.feeCredit = this.context.fees.getMiningFeePaid();
 
-      // set wallet's channel size to exactly feeCredit,
+      // set wallet's channel size to exactly feeCredit (full liquidity fees),
       // from now on the service wallet will be billed normally like other
-      // wallets
+      // wallets - i.e. if this payment has something left above
+      // the liquidity fees we will account for that extension below
       newState.channelSize = newState.feeCredit;
     }
 
