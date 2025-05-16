@@ -348,31 +348,56 @@ export class DB implements IDB {
     return tx;
   }
 
-  public getInvoiceInfo({
-    id,
-    paymentHash,
-  }: {
-    id?: string;
-    paymentHash?: string;
-  }): InvoiceInfo | undefined {
-    if (!id && !paymentHash) throw new Error("Specify id or payment hash");
-    const sql = id
-      ? `
+  private getInvoiceRecById(id: string) {
+    const sql = `
       SELECT * FROM records
       WHERE
         id = ?
       AND
         is_outgoing = 0
-    `
-      : `
+    `;
+    return this.db.prepare(sql).get(id);
+  }
+
+  private getInvoiceRecByPaymentHash(paymentHash: string) {
+    const sql = `
       SELECT * FROM records
       WHERE
         payment_hash = ?
       AND
         is_outgoing = 0
     `;
-    const select = this.db.prepare(sql);
-    const r = select.get(id ? id : paymentHash!);
+    return this.db.prepare(sql).get(paymentHash);
+  }
+
+  private getInvoiceRecByInvoiceString(invoice: string) {
+    const sql = `
+      SELECT * FROM records
+      WHERE
+        invoice = ?
+      AND
+        is_outgoing = 0
+    `;
+    return this.db.prepare(sql).get(invoice);
+  }
+
+  public getInvoiceInfo({
+    id,
+    paymentHash,
+    invoice: invoiceString,
+  }: {
+    id?: string;
+    paymentHash?: string;
+    invoice?: string;
+  }): InvoiceInfo | undefined {
+    if (!id && !paymentHash && !invoiceString)
+      throw new Error("Specify id or payment hash or invoice");
+    const r = id
+      ? this.getInvoiceRecById(id)
+      : paymentHash
+      ? this.getInvoiceRecByPaymentHash(paymentHash)
+      : this.getInvoiceRecByInvoiceString(invoiceString!);
+
     if (!r) return undefined;
     const tx = this.recToTx(r);
     if (tx.type === "outgoing") throw new Error("Invalid type");
@@ -679,12 +704,12 @@ export class DB implements IDB {
     const balance = this.db.prepare(
       `SELECT SUM(balance) as cnt FROM wallets WHERE pubkey != ?`
     );
-    stats.totalBalance = balance.get(servicePubkey)?.cnt as number;
+    stats.totalBalance = balance.get(servicePubkey)?.cnt as number || 0;
 
     const fee = this.db.prepare(
       `SELECT SUM(fee_credit) as cnt FROM wallets WHERE pubkey != ?`
     );
-    stats.totalFeeCredit = fee.get(servicePubkey)?.cnt as number;
+    stats.totalFeeCredit = fee.get(servicePubkey)?.cnt as number || 0;
 
     return stats;
   }

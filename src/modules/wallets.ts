@@ -1,4 +1,5 @@
 import {
+  InvoiceInfo,
   MakeInvoiceBackendReq,
   OnIncomingPaymentEvent,
   WalletContext,
@@ -36,7 +37,6 @@ export class Wallets {
   private wallets = new Map<string, Wallet>();
   private onZapReceipt?: OnZapReceipt;
   private adminPubkey?: string;
-  private maxBalance: number = 0;
   private allowedPubkeys = new Set<string>();
 
   constructor(context: WalletContext) {
@@ -46,10 +46,8 @@ export class Wallets {
   public start(opts: {
     onZapReceipt: OnZapReceipt;
     adminPubkey?: string;
-    maxBalance: number;
   }) {
     this.onZapReceipt = opts.onZapReceipt;
-    this.maxBalance = opts.maxBalance;
     this.adminPubkey = opts.adminPubkey;
 
     const wallets = this.context.db.listWallets();
@@ -106,7 +104,7 @@ export class Wallets {
   }> {
     const info = await this.context.backend.getInfo();
     return {
-      alias: this.context.servicePubkey,
+      alias: this.context.serviceSigner.getPublicKey(),
       color: "000000",
       pubkey: info.nodeId,
       network: info.chain,
@@ -170,10 +168,10 @@ export class Wallets {
     if (req.amount < 1000 || req.amount % 1000 > 0)
       throw new Error("Only sat payments are supported");
 
-    const isService = pubkey === this.context.servicePubkey;
+    const isService = pubkey === this.context.serviceSigner.getPublicKey();
     // limit invoice size
     if (!isService) {
-      if (req.amount > this.maxBalance)
+      if (req.amount > this.context.maxBalance)
         throw new Error("Max invoice size exceeded");
     }
 
@@ -194,7 +192,7 @@ export class Wallets {
 
     // limit total balance
     if (!isService) {
-      if (w && w.getState().balance + req.amount > this.maxBalance)
+      if (w && w.getState().balance + req.amount > this.context.maxBalance)
         throw new Error("Wallet balance would exceed max balance");
     }
 
@@ -237,12 +235,34 @@ export class Wallets {
     }
   }
 
+  private payInternal(req: NWCPayInvoiceReq, info: InvoiceInfo): Promise<NWCPaymentResult> {
+    const from = this.wallets.get(req.clientPubkey);
+    const to = this.wallets.get(info.clientPubkey);
+    if (from === to) throw new Error("Self-payment not supported");
+
+    throw new Error("Not implemented yet");
+  }
+
   public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
-    if (req.clientPubkey === this.context.servicePubkey)
+    if (req.clientPubkey === this.context.serviceSigner.getPublicKey())
       throw new Error("Service pubkey can't send payments");
     const w = this.wallets.get(req.clientPubkey);
     if (!w) throw new Error(NWC_INSUFFICIENT_BALANCE);
-    return w.payInvoice(req);
+
+    // NOTE: we're not handling internal _public_ payments yet bcs
+    // phoenixd doesn't let us destroy an unpaid invoice,
+    // which means we could accept internal payment and
+    // external payment on the same invoice and there's
+    // no way to prevent that from happening. Leave it
+    // for later.
+    const info = this.context.db.getInvoiceInfo({ invoice: req.invoice });
+    if (this.context.enclavedInternalWallet && info) {
+      // internal payment
+      return this.payInternal(req, info);
+    } else {
+      // external payment
+      return w.payInvoice(req);
+    }
   }
 
   public chargeWalletFee(pubkey: string) {

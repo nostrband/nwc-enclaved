@@ -62,7 +62,7 @@ export class Wallet {
       const noLiquidity = !this.context.fees.getMiningFeePaid();
 
       // payment received by service itself
-      const isService = this.pubkey === this.context.servicePubkey;
+      const isService = this.pubkey === this.context.serviceSigner.getPublicKey();
 
       console.log("settle invoice", {
         noLiquidity,
@@ -113,7 +113,9 @@ export class Wallet {
         );
 
         // calc mining fee separately to return it to caller
-        const miningFeeLeft = this.context.fees.calcMiningFeeMsat(channelExtensionAmount);
+        const miningFeeLeft = this.context.fees.calcMiningFeeMsat(
+          channelExtensionAmount
+        );
 
         // add mining fee to wallet's fee credit
         newState.feeCredit += miningFeeLeft;
@@ -226,17 +228,17 @@ export class Wallet {
   // avoiding races, especially btw different wallets. Right now
   // there's basically only 1 async call to phoenix - need
   // to keep it this way.
-  public async payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
+  public async payInvoice(
+    req: NWCPayInvoiceReq,
+    payInternally?: (req: NWCPayInvoiceReq) => Promise<NWCPaymentResult>
+  ): Promise<NWCPaymentResult> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
     if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS_PER_WALLET)
       throw new Error(NWC_RATE_LIMITED);
 
     // parse bolt11 string
-    const { invoice, route, nodeId } = this.parseBolt11(
-      req.invoice,
-      req.amount
-    );
+    const { invoice, route } = this.parseBolt11(req.invoice, req.amount);
 
     if (!invoice.payment_hash) throw new Error("Invalid invoice");
     if (!invoice.amount) throw new Error("Empty amount");
@@ -246,19 +248,6 @@ export class Wallet {
     // already paying this?
     if (this.pendingPayments.has(invoice.payment_hash))
       throw new Error(NWC_PAYMENT_FAILED);
-
-    // NOTE: we're not handling internal payments yet bcs
-    // phoenixd doesn't let us destroy an unpaid invoice,
-    // which means we could accept internal payment and
-    // external payment on the same invoice and there's
-    // no way to prevent that from happening. Leave it
-    // for later.
-
-    // is it internal payment?
-    // const info = await this.context.backend.getInfo();
-    // if (info.nodeId === nodeId) {
-
-    // }
 
     // check if client has enough balance,
     // take the prescribed route into account to make sure

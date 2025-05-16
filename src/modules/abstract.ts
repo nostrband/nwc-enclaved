@@ -124,6 +124,7 @@ export interface IDB {
   getInvoiceInfo(opt: {
     id?: string;
     paymentHash?: string;
+    invoice?: string;
   }): InvoiceInfo | undefined;
   settleInvoice(
     clientPubkey: string,
@@ -145,13 +146,24 @@ export interface IDB {
     transactions: NWCTransaction[];
   };
   getLastInvoiceSettledAt(): number;
+  getStats(servicePubkey: string): {
+    payments: number;
+    paymentsHour: number;
+    wallets: number;
+    walletsHour: number;
+    totalBalance: number;
+    totalFeeCredit: number;
+  };
 }
 
 export interface WalletContext {
-  servicePubkey: string;
+  serviceSigner: Signer;
   backend: IBackend;
   db: IDB;
   fees: IFeePolicy;
+  enclavedInternalWallet?: boolean;
+  relays: string[];
+  maxBalance: number;
 }
 
 export type OnIncomingPayment = (p: OnIncomingPaymentEvent) => Promise<void>;

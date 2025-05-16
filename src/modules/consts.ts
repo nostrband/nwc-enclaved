@@ -18,6 +18,8 @@ export const PHOENIX_PAYMENT_FEE_PCT = 0.004;
 export const PHOENIX_PAYMENT_FEE_BASE = 4000;
 export const PHOENIX_AUTO_LIQUIDITY_AMOUNT = 2000000000; // 2m sats
 
+export const ANNOUNCEMENT_INTERVAL = 600000;
+
 export const WALLET_FEE_PERIOD = 24 * 3600; // 1 day
 export const WALLET_FEE = 1000; // 1 sat
 export const PAYMENT_FEE = 1000; // 1 sat

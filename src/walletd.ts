@@ -7,26 +7,17 @@ import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
-import {
-  MAX_TX_AGE,
-  PAYMENT_FEE,
-  PHOENIX_LIQUIDITY_FEE,
-  PHOENIX_PAYMENT_FEE_BASE,
-  PHOENIX_PAYMENT_FEE_PCT,
-  WALLET_FEE,
-  WALLET_FEE_PERIOD,
-} from "./modules/consts";
-import { Signer } from "./modules/abstract";
+import { MAX_TX_AGE } from "./modules/consts";
+import { Signer, WalletContext } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
 import {
   fetchCerts,
   isValidZapRequest,
-  publishNip65Relays,
-  publishServiceInfo,
   publishZapReceipt,
 } from "./modules/nostr";
-import { now } from "./modules/utils";
+import { normalizeRelay, now } from "./modules/utils";
+import { startAnnouncing } from "./modules/announce";
 
 // read from file or generate
 const servicePrivkey = getSecretKey();
@@ -34,48 +25,50 @@ const servicePubkey = getPublicKey(servicePrivkey);
 const db = new DB();
 const phoenix = new Phoenix();
 const fees = new PhoenixFeePolicy();
-const wallets = new Wallets({ backend: phoenix, db, fees, servicePubkey });
 
 // forward NWC calls to wallets
 class Server extends NWCServer {
-  constructor(signer: Signer) {
+  private wallets: Wallets;
+
+  constructor(signer: Signer, wallets: Wallets) {
     super(signer);
+    this.wallets = wallets;
   }
 
   protected async addPubkey(req: NWCRequest, res: NWCReply): Promise<void> {
-    res.result = wallets.addPubkey({
+    res.result = this.wallets.addPubkey({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
   }
 
   protected async getBalance(req: NWCRequest, res: NWCReply): Promise<void> {
-    res.result = await wallets.getBalance(req.clientPubkey);
+    res.result = await this.wallets.getBalance(req.clientPubkey);
   }
 
   protected async getInfo(req: NWCRequest, res: NWCReply): Promise<void> {
-    res.result = await wallets.getInfo(req.clientPubkey);
+    res.result = await this.wallets.getInfo(req.clientPubkey);
   }
 
   protected async listTransactions(
     req: NWCRequest,
     res: NWCReply
   ): Promise<void> {
-    res.result = await wallets.listTransactions({
+    res.result = await this.wallets.listTransactions({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
   }
 
   protected async lookupInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
-    res.result = await wallets.lookupInvoice({
+    res.result = await this.wallets.lookupInvoice({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
   }
 
   protected async makeInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
-    res.result = await wallets.makeInvoice({
+    res.result = await this.wallets.makeInvoice({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
@@ -98,7 +91,7 @@ class Server extends NWCServer {
     if (req.params.zap_request)
       console.log("valid zap request", req.params.zap_request);
 
-    res.result = await wallets.makeInvoiceFor({
+    res.result = await this.wallets.makeInvoiceFor({
       ...req.params,
       clientPubkey: req.clientPubkey,
     });
@@ -106,7 +99,7 @@ class Server extends NWCServer {
 
   protected async payInvoice(req: NWCRequest, res: NWCReply): Promise<void> {
     try {
-      res.result = await wallets.payInvoice({
+      res.result = await this.wallets.payInvoice({
         ...req.params,
         clientPubkey: req.clientPubkey,
       });
@@ -123,7 +116,7 @@ class Server extends NWCServer {
   }
 }
 
-async function startBackgroundJobs() {
+async function startBackgroundJobs(wallets: Wallets) {
   // GC
   setInterval(() => {
     db.clearOldTxs(now() - MAX_TX_AGE);
@@ -138,16 +131,23 @@ async function startBackgroundJobs() {
 }
 
 export async function startWalletd({
-  relayUrl,
+  relayUrls,
   phoenixPassword,
   maxBalance,
   enclavedInternalWallet,
 }: {
-  relayUrl: string;
+  relayUrls: string;
   phoenixPassword: string;
   maxBalance: number;
   enclavedInternalWallet?: boolean;
 }) {
+  const relays = relayUrls
+    .split(",")
+    .map((s) => normalizeRelay(s.trim()))
+    .filter((s) => !!s)
+    .map((s) => s as string);
+  if (!relays.length) throw new Error("No relays");
+
   // read or create our key
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
   console.log("servicePubkey", servicePubkey);
@@ -166,9 +166,20 @@ export async function startWalletd({
     console.log("enclaved parent pubkey", adminPubkey);
   }
 
-  // load all wallets
-  wallets.start({
+  // global settings etc
+  const context: WalletContext = {
+    backend: phoenix,
+    db,
+    fees,
+    serviceSigner,
+    enclavedInternalWallet,
+    relays,
     maxBalance,
+  };
+
+  // load all wallets
+  const wallets = new Wallets(context);
+  wallets.start({
     adminPubkey,
     onZapReceipt: (zapRequest: string, bolt11: string, preimage: string) => {
       publishZapReceipt(zapRequest, bolt11, preimage, serviceSigner).catch(
@@ -196,7 +207,7 @@ export async function startWalletd({
   });
 
   // NWC server
-  const server = new Server(serviceSigner);
+  const server = new Server(serviceSigner, wallets);
 
   // request handler
   const process = async (e: Event, relay: Relay) => {
@@ -219,34 +230,11 @@ export async function startWalletd({
   });
 
   // listen to requests targeting our pubkey
-  requestListener.addPubkey(servicePubkey, [relayUrl]);
+  requestListener.addPubkey(servicePubkey, relays);
 
-  // advertise our relays
-  await publishNip65Relays(serviceSigner);
-  // update our announcement once per minute
-  const announce = async () => {
-    await publishServiceInfo(
-      {
-        maxBalance: maxBalance,
-        minSendable: 1000,
-        maxSendable: maxBalance,
-        liquidityFeeRate: PHOENIX_LIQUIDITY_FEE,
-        paymentFeeRate: PHOENIX_PAYMENT_FEE_PCT,
-        paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
-        walletFeeBase: WALLET_FEE,
-        walletFeePeriod: WALLET_FEE_PERIOD,
-        open: (await phoenix.getInfo()).channels.length > 0,
-        stats: db.getStats(servicePubkey),
-      },
-      serviceSigner,
-      [relayUrl]
-    ).catch((e) =>
-      console.error(new Date(), "failed to publish service info", e)
-    );
-  };
-  await announce();
-  setInterval(announce, 600000);
+  // announce
+  startAnnouncing(context);
 
   // clear old txs, empty wallets, unpaid expired invoices etc
-  startBackgroundJobs();
+  startBackgroundJobs(wallets);
 }
