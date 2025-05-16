@@ -47,6 +47,83 @@ export class Wallet {
     return this.pubkey;
   }
 
+  private extendChannel(
+    amount: number,
+    newState: WalletState,
+    p: OnIncomingPaymentEvent
+  ) {
+    // result: mining fee that we'll charge basen on how much was extended
+    let miningFee = 0;
+
+    // no liquidity?
+    const noLiquidity = !this.context.fees.getMiningFeePaid();
+
+    // payment received by service itself
+    const isService = this.pubkey === this.context.serviceSigner.getPublicKey();
+
+    console.log("settle invoice", {
+      noLiquidity,
+      isService,
+      firstLiquidityPayment: p.firstLiquidityPayment,
+      miningFeePaid: this.context.fees.getMiningFeePaid(),
+    });
+
+    // no liquidity or just bought it?
+    if (noLiquidity) {
+      if (!isService)
+        throw new Error("Payment to non-service pubkey without liquidity");
+      // without any channels the initial payments go to
+      // the servicePubkey's wallet and are fully billed as feeCredit
+      miningFee = amount;
+      newState.feeCredit += miningFee;
+      newState.channelSize = newState.feeCredit;
+    } else if (p.firstLiquidityPayment) {
+      if (!isService)
+        throw new Error("Payment to non-service pubkey without liquidity");
+
+      // newly paid piece of mining fee is 'first channel' - previously accumulated credit
+      miningFee = this.context.fees.getMiningFeePaid() - newState.feeCredit;
+
+      // set the full payment for the first liquidity piece
+      // to service pubkey's fee credit
+      newState.feeCredit = this.context.fees.getMiningFeePaid();
+
+      // set wallet's channel size to exactly feeCredit,
+      // from now on the service wallet will be billed normally like other
+      // wallets
+      newState.channelSize = newState.feeCredit;
+    }
+
+    // extend virtual channel by a round number of sats
+    const channelExtensionAmount =
+      Math.ceil((newState.balance - newState.channelSize) / 1000) * 1000;
+
+    // set new size
+    newState.channelSize += channelExtensionAmount;
+
+    // might be 0 on the first liquidity event
+    if (channelExtensionAmount > 0) {
+      // auto-liquidity service fee
+      newState.feeCredit += Math.ceil(
+        channelExtensionAmount * this.context.fees.getLiquidityServiceFeeRate()
+      );
+
+      // calc mining fee separately to return it to caller
+      const miningFeeLeft = this.context.fees.calcMiningFeeMsat(
+        channelExtensionAmount
+      );
+
+      // add mining fee to wallet's fee credit
+      newState.feeCredit += miningFeeLeft;
+
+      // add the leftover mining fee to one potentially
+      // paid for initial liquidity
+      miningFee += miningFeeLeft;
+    }
+
+    return miningFee;
+  }
+
   private prepareStateSettleInvoice(amount: number, p: OnIncomingPaymentEvent) {
     const newState = { ...this.state };
 
@@ -57,73 +134,11 @@ export class Wallet {
     let miningFee = 0;
 
     // need to extend our virtual channel?
-    if (newState.balance > newState.channelSize) {
-      // no liquidity?
-      const noLiquidity = !this.context.fees.getMiningFeePaid();
-
-      // payment received by service itself
-      const isService = this.pubkey === this.context.serviceSigner.getPublicKey();
-
-      console.log("settle invoice", {
-        noLiquidity,
-        isService,
-        firstLiquidityPayment: p.firstLiquidityPayment,
-        miningFeePaid: this.context.fees.getMiningFeePaid(),
-      });
-
-      // no liquidity or just bought it?
-      if (noLiquidity) {
-        if (!isService)
-          throw new Error("Payment to non-service pubkey without liquidity");
-        // without any channels the initial payments go to
-        // the servicePubkey's wallet and are fully billed as feeCredit
-        miningFee = amount;
-        newState.feeCredit += miningFee;
-        newState.channelSize = newState.feeCredit;
-      } else if (p.firstLiquidityPayment) {
-        if (!isService)
-          throw new Error("Payment to non-service pubkey without liquidity");
-
-        // newly paid piece of mining fee is 'first channel' - previously accumulated credit
-        miningFee = this.context.fees.getMiningFeePaid() - newState.feeCredit;
-
-        // set the full payment for the first liquidity piece
-        // to service pubkey's fee credit
-        newState.feeCredit = this.context.fees.getMiningFeePaid();
-
-        // set wallet's channel size to exactly feeCredit,
-        // from now on the service wallet will be billed normally like other
-        // wallets
-        newState.channelSize = newState.feeCredit;
-      }
-
-      // extend virtual channel by a round number of sats
-      const channelExtensionAmount =
-        Math.ceil((newState.balance - newState.channelSize) / 1000) * 1000;
-
-      // set new size
-      newState.channelSize += channelExtensionAmount;
-
-      // might be 0 on the first liquidity event
-      if (channelExtensionAmount > 0) {
-        // auto-liquidity service fee
-        newState.feeCredit += Math.ceil(
-          channelExtensionAmount *
-            this.context.fees.getLiquidityServiceFeeRate()
-        );
-
-        // calc mining fee separately to return it to caller
-        const miningFeeLeft = this.context.fees.calcMiningFeeMsat(
-          channelExtensionAmount
-        );
-
-        // add mining fee to wallet's fee credit
-        newState.feeCredit += miningFeeLeft;
-
-        // add the leftover mining fee to one potentially
-        // paid for initial liquidity
-        miningFee += miningFeeLeft;
-      }
+    if (
+      !this.context.enclavedInternalWallet &&
+      newState.balance > newState.channelSize
+    ) {
+      miningFee = this.extendChannel(amount, newState, p);
     }
 
     return { newState, miningFee };
@@ -134,7 +149,10 @@ export class Wallet {
     totalFee: number,
     phoenixFee: number
   ): WalletState {
-    const miningFee = totalFee - phoenixFee - PAYMENT_FEE;
+    const miningFee =
+      totalFee -
+      phoenixFee -
+      (this.context.enclavedInternalWallet ? 0 : PAYMENT_FEE);
     return {
       channelSize: this.state.channelSize,
       balance: this.state.balance - amount - totalFee,
@@ -249,6 +267,10 @@ export class Wallet {
     if (this.pendingPayments.has(invoice.payment_hash))
       throw new Error(NWC_PAYMENT_FAILED);
 
+    const isInternal = !!payInternally;
+    if (isInternal && !this.context.enclavedInternalWallet)
+      throw new Error("Internal payments only in enclaved mode");
+
     // check if client has enough balance,
     // take the prescribed route into account to make sure
     // we aren't attacked with huge-fee routes that we wouldn't estimate
@@ -256,11 +278,13 @@ export class Wallet {
     // in parallel bcs both will use the same feeCredit value,
     // later when settled one fee will be deduced from feeCredit
     // first and the next payment will have lower actual fee
-    const feeEstimate = this.context.fees.estimatePaymentFeeMsat(
-      this.state,
-      invoice.amount,
-      route
-    );
+    const feeEstimate = isInternal
+      ? 0
+      : this.context.fees.estimatePaymentFeeMsat(
+          this.state,
+          invoice.amount,
+          route
+        );
 
     // amount we're locking for this payment
     const lockAmount = invoice.amount + feeEstimate;
@@ -291,8 +315,15 @@ export class Wallet {
 
     try {
       // pay
-      const r = await this.context.backend.payInvoice(req);
-      if (bytesToHex(sha256(hexToBytes(r.preimage))) !== invoice.payment_hash)
+      const r = await (isInternal
+        ? payInternally(req)
+        : this.context.backend.payInvoice(req));
+
+      // sanity check
+      if (
+        !isInternal &&
+        bytesToHex(sha256(hexToBytes(r.preimage))) !== invoice.payment_hash
+      )
         throw new Error("Wrong preimage");
 
       // done
@@ -302,11 +333,13 @@ export class Wallet {
       const phoenixFee = r.fees_paid || 0;
 
       // determine fees for this payment
-      const totalFee = this.context.fees.calcPaymentFeeMsat(
-        this.state,
-        invoice.amount,
-        phoenixFee
-      );
+      const totalFee = isInternal
+        ? 0
+        : this.context.fees.calcPaymentFeeMsat(
+            this.state,
+            invoice.amount,
+            phoenixFee
+          );
 
       // new wallet state accounting for payment and fees
       const newState = this.prepareStateSettlePayment(
@@ -358,6 +391,8 @@ export class Wallet {
   }
 
   public chargeWalletFee() {
+    if (this.context.enclavedInternalWallet)
+      throw new Error("No wallet fee in enclaved mode");
     this.context.db.chargeWalletFee(this.pubkey);
     this.state = {
       ...this.state,

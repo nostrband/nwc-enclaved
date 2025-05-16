@@ -8,7 +8,7 @@ import {
 } from "./consts";
 import { Signer } from "./abstract";
 
-export class NWCServer {
+export class NWCServerBase {
   private signer: Signer;
   private done = new Set<string>();
 
@@ -87,10 +87,7 @@ export class NWCServer {
 
     switch (req.method) {
       case "get_balance":
-        valid =
-          !!req.params.pubkey &&
-          typeof req.params.pubkey === "string" &&
-          req.params.pubkey.length === 64;
+        valid = true;
         break;
       case "pay_invoice":
         valid = !!req.params.invoice && typeof req.params.invoice === "string";

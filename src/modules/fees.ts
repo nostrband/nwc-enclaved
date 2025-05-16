@@ -11,6 +11,11 @@ export class PhoenixFeePolicy implements IFeePolicy {
   private miningFeeEstimate: number = 0;
   private miningFeePaid: number = 0;
   private miningFeeReceived: number = 0;
+  private enclavedInternalWallet: boolean;
+
+  constructor(enclavedInternalWallet: boolean) {
+    this.enclavedInternalWallet = enclavedInternalWallet;
+  }
 
   setMiningFeeEstimate(amount: number) {
     this.miningFeeEstimate = amount;
@@ -66,7 +71,7 @@ export class PhoenixFeePolicy implements IFeePolicy {
     // we charge from fee credit this wallet has accumulated,
     // spread over wallet's **available** balance (balance - feeCredit)
     return (
-      PAYMENT_FEE +
+      (this.enclavedInternalWallet ? 0 : PAYMENT_FEE) +
       Math.ceil(
         (amount * wallet.feeCredit) / (wallet.balance - wallet.feeCredit)
       )

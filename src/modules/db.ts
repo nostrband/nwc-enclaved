@@ -15,8 +15,11 @@ import {
 
 export class DB implements IDB {
   private db: DatabaseSync;
+  private isTx: boolean = false;
+  private enclavedInternalWallet: boolean;
 
-  constructor() {
+  constructor(enclavedInternalWallet: boolean) {
+    this.enclavedInternalWallet = enclavedInternalWallet;
     this.db = new DatabaseSync(DB_PATH);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS records (
@@ -112,6 +115,27 @@ export class DB implements IDB {
     this.db.close();
   }
 
+  public startTx() {
+    if (this.isTx) throw new Error("Tx already started");
+    this.isTx = true;
+    this.db.exec("BEGIN TRANSACTION");
+    console.log("start transaction");
+  }
+
+  public commitTx() {
+    if (!this.isTx) throw new Error("Tx is not started");
+    this.isTx = false;
+    this.db.exec("COMMIT TRANSACTION");
+    console.log("commit transaction");
+  }
+
+  public rollbackTx() {
+    if (!this.isTx) throw new Error("Tx is not started");
+    this.isTx = false;
+    this.db.exec("ROLLBACK TRANSACTION");
+    console.log("rollback transaction");
+  }
+
   public addMiningFeePaid(fee: number) {
     const fees = this.db.prepare(`
       INSERT INTO fees (id, mining_fee_paid)
@@ -154,7 +178,7 @@ export class DB implements IDB {
   public chargeWalletFee(pubkey: string) {
     console.log(new Date(), "db charging wallet fee on", pubkey);
     const tm = now();
-    this.db.exec("BEGIN TRANSACTION");
+    if (!this.isTx) this.db.exec("BEGIN TRANSACTION");
     try {
       const payment = this.db.prepare(`
         INSERT INTO records (
@@ -189,10 +213,10 @@ export class DB implements IDB {
       const fr = fee.run(WALLET_FEE);
       if (!fr.changes) throw new Error("Failed to add wallet fee");
     } catch (e) {
-      this.db.exec("ROLLBACK TRANSACTION");
+      if (!this.isTx) this.db.exec("ROLLBACK TRANSACTION");
       throw e;
     }
-    this.db.exec("COMMIT TRANSACTION");
+    if (!this.isTx) this.db.exec("COMMIT TRANSACTION");
   }
 
   public clearExpiredInvoices() {
@@ -424,7 +448,7 @@ export class DB implements IDB {
     miningFee: number
   ) {
     // tx to settle the invoice and update the wallet balance
-    this.db.exec("BEGIN TRANSACTION");
+    if (!this.isTx) this.db.exec("BEGIN TRANSACTION");
 
     try {
       const {
@@ -451,7 +475,7 @@ export class DB implements IDB {
       const r = update.run(payment.settledAt, payment.preimage, id!);
       if (r.changes === 0) {
         console.log(new Date(), "invoice already settled", id!);
-        this.db.exec("ROLLBACK TRANSACTION");
+        if (!this.isTx) this.db.exec("ROLLBACK TRANSACTION");
         return false;
       }
 
@@ -471,12 +495,12 @@ export class DB implements IDB {
       console.error(new Date(), "tx failed", e);
 
       // rollback tx
-      this.db.exec("ROLLBACK TRANSACTION");
+      if (!this.isTx) this.db.exec("ROLLBACK TRANSACTION");
       throw e;
     }
 
     // commit if all ok
-    this.db.exec("COMMIT TRANSACTION");
+    if (!this.isTx) this.db.exec("COMMIT TRANSACTION");
     return true;
   }
 
@@ -547,7 +571,7 @@ export class DB implements IDB {
     walletState: WalletState
   ) {
     // tx to settle the payment and update the wallet balance
-    this.db.exec("BEGIN TRANSACTION");
+    if (!this.isTx) this.db.exec("BEGIN TRANSACTION");
     try {
       // settle payment
       const update = this.db.prepare(`
@@ -576,23 +600,25 @@ export class DB implements IDB {
       // update wallet
       this.updateWalletState(clientPubkey, walletState);
 
-      const fee = this.db.prepare(`
-        UPDATE fees
-        SET payment_fee_received = payment_fee_received + ?
-        WHERE id = 1
-      `);
-      const fr = fee.run(PAYMENT_FEE);
-      if (!fr.changes) throw new Error("Failed to add payment fee");
+      if (!this.enclavedInternalWallet) {
+        const fee = this.db.prepare(`
+          UPDATE fees
+          SET payment_fee_received = payment_fee_received + ?
+          WHERE id = 1
+        `);
+        const fr = fee.run(PAYMENT_FEE);
+        if (!fr.changes) throw new Error("Failed to add payment fee");
+      }
     } catch (e) {
       console.error(new Date(), "tx failed", e);
 
       // rollback tx
-      this.db.exec("ROLLBACK TRANSACTION");
+      if (!this.isTx) this.db.exec("ROLLBACK TRANSACTION");
       throw e;
     }
 
     // commit if all ok
-    this.db.exec("COMMIT TRANSACTION");
+    if (!this.isTx) this.db.exec("COMMIT TRANSACTION");
   }
 
   private recToTx(r: Record<string, any>): NWCTransaction {
@@ -704,12 +730,12 @@ export class DB implements IDB {
     const balance = this.db.prepare(
       `SELECT SUM(balance) as cnt FROM wallets WHERE pubkey != ?`
     );
-    stats.totalBalance = balance.get(servicePubkey)?.cnt as number || 0;
+    stats.totalBalance = (balance.get(servicePubkey)?.cnt as number) || 0;
 
     const fee = this.db.prepare(
       `SELECT SUM(fee_credit) as cnt FROM wallets WHERE pubkey != ?`
     );
-    stats.totalFeeCredit = fee.get(servicePubkey)?.cnt as number || 0;
+    stats.totalFeeCredit = (fee.get(servicePubkey)?.cnt as number) || 0;
 
     return stats;
   }

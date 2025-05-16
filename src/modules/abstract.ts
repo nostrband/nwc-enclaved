@@ -99,6 +99,9 @@ export interface InvoiceInfo {
 }
 
 export interface IDB {
+  startTx(): void;
+  commitTx(): void;
+  rollbackTx(): void;
   getFees(): { miningFeeReceived: number; miningFeePaid: number };
   listWallets(): {
     pubkey: string;

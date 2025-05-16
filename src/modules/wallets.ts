@@ -10,6 +10,7 @@ import {
   MAX_INVOICES,
   MAX_INVOICE_EXPIRY,
   MAX_WALLETS,
+  PHOENIX_AUTO_LIQUIDITY_AMOUNT,
 } from "./consts";
 import {
   NWC_INSUFFICIENT_BALANCE,
@@ -24,6 +25,7 @@ import {
   NWCLookupInvoiceReq,
   NWC_NOT_FOUND,
 } from "./nwc-types";
+import { now } from "./utils";
 import { Wallet } from "./wallet";
 
 export type OnZapReceipt = (
@@ -39,14 +41,11 @@ export class Wallets {
   private adminPubkey?: string;
   private allowedPubkeys = new Set<string>();
 
-  constructor(context: WalletContext) {
+  constructor(
+    context: WalletContext,
+    opts: { onZapReceipt: OnZapReceipt; adminPubkey?: string }
+  ) {
     this.context = context;
-  }
-
-  public start(opts: {
-    onZapReceipt: OnZapReceipt;
-    adminPubkey?: string;
-  }) {
     this.onZapReceipt = opts.onZapReceipt;
     this.adminPubkey = opts.adminPubkey;
 
@@ -196,6 +195,17 @@ export class Wallets {
         throw new Error("Wallet balance would exceed max balance");
     }
 
+    // internal wallet?
+    if (this.context.enclavedInternalWallet) {
+      // only 2m sats allowed for internal wallet,
+      // otherwise we need to enable liquidity fees
+      const totalBalance = [...this.wallets.values()]
+        .map((w) => w.getState().balance)
+        .reduce((a, c) => a + c, 0);
+      if (totalBalance + req.amount > PHOENIX_AUTO_LIQUIDITY_AMOUNT)
+        throw new Error("Max node balance exceeded");
+    }
+
     // max unpaid invoices
     const counts = this.context.db.countUnpaidInvoices();
     if (counts.anons >= (w ? MAX_INVOICES : MAX_ANON_INVOICES))
@@ -235,12 +245,40 @@ export class Wallets {
     }
   }
 
-  private payInternal(req: NWCPayInvoiceReq, info: InvoiceInfo): Promise<NWCPaymentResult> {
-    const from = this.wallets.get(req.clientPubkey);
-    const to = this.wallets.get(info.clientPubkey);
-    if (from === to) throw new Error("Self-payment not supported");
+  private async payInternal(
+    req: NWCPayInvoiceReq,
+    info: InvoiceInfo
+  ): Promise<NWCPaymentResult> {
+    if (req.clientPubkey === info.clientPubkey)
+      throw new Error("Self-payment not supported");
 
-    throw new Error("Not implemented yet");
+    const from = this.wallets.get(req.clientPubkey);
+    if (!from) throw new Error("No payment wallet");
+
+    this.context.db.startTx();
+    try {
+      const r = await from.payInvoice(req, async (req: NWCPayInvoiceReq) => {
+        console.log("internal payment of", req.invoice);
+        this.onIncomingPayment({
+          firstLiquidityPayment: false,
+          paymentHash: info.invoice.payment_hash,
+          externalId: info.id,
+          settledAt: now(),
+          preimage: "",
+        });
+
+        return {
+          preimage: "-", // make some validators happier
+          fees_paid: 0,
+        };
+      });
+      this.context.db.commitTx();
+      return r;
+    } catch (e) {
+      this.context.db.rollbackTx();
+      console.log("internal payment failed", e);
+      throw e;
+    }
   }
 
   public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {

@@ -12,7 +12,8 @@ import { publishNip65Relays, publishServiceInfo } from "./nostr";
 
 // update our announcement once per minute
 async function announce(context: WalletContext) {
-  await publishNip65Relays(context.serviceSigner);
+  if (!context.enclavedInternalWallet)
+    await publishNip65Relays(context.serviceSigner);
 
   await publishServiceInfo(
     {
@@ -28,7 +29,8 @@ async function announce(context: WalletContext) {
       stats: context.db.getStats(context.serviceSigner.getPublicKey()),
     },
     context.serviceSigner,
-    context.relays
+    context.relays,
+    context.enclavedInternalWallet
   ).catch((e) =>
     console.error(new Date(), "failed to publish service info", e)
   );

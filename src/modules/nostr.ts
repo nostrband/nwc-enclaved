@@ -64,7 +64,10 @@ export async function fetchCerts(pubkey: string) {
     token: process.env["ENCLAVED_TOKEN"] || "",
   });
 
-  const r = await client.call<{ root: Event, certs: Event[] }>("create_certificate", { pubkey })
+  const r = await client.call<{ root: Event; certs: Event[] }>(
+    "create_certificate",
+    { pubkey }
+  );
   console.log("certs", r);
   return r;
 }
@@ -83,10 +86,26 @@ export async function publishServiceInfo(
     stats: any;
   },
   signer: Signer,
-  nwcRelays: string[]
+  nwcRelays: string[],
+  enclavedInternalWallet?: boolean
 ) {
-  const certs = await fetchCerts(signer.getPublicKey());
+  // nwc info event
+  const nwcInfo: UnsignedEvent = {
+    pubkey: signer.getPublicKey(),
+    kind: KIND_NWC_INFO,
+    created_at: now(),
+    content: NWC_SUPPORTED_METHODS.join(","),
+    tags: [],
+  };
 
+  const nwcInfoEvent = await signer.signEvent(nwcInfo);
+  await publish(nwcInfoEvent, nwcRelays);
+  console.log("published nwc info", nwcInfoEvent, nwcRelays);
+
+  // no other announcements for enclaved mode
+  if (enclavedInternalWallet) return;
+
+  const certs = await fetchCerts(signer.getPublicKey());
   const serviceInfo: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
     kind: KIND_SERVICE_INFO,
@@ -111,7 +130,7 @@ export async function publishServiceInfo(
   };
   if (certs) {
     serviceInfo.tags.push(["tee_root", JSON.stringify(certs.root)]);
-    for (const cert of certs.certs) 
+    for (const cert of certs.certs)
       serviceInfo.tags.push(["tee_cert", JSON.stringify(cert)]);
   }
 
@@ -178,18 +197,6 @@ ${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
   const profileEvent = await signer.signEvent(profile);
   await publish(profileEvent, OUTBOX_RELAYS);
   console.log("published profile", profileEvent, OUTBOX_RELAYS);
-
-  const nwcInfo: UnsignedEvent = {
-    pubkey: signer.getPublicKey(),
-    kind: KIND_NWC_INFO,
-    created_at: now(),
-    content: NWC_SUPPORTED_METHODS.join(","),
-    tags: [],
-  };
-
-  const nwcInfoEvent = await signer.signEvent(nwcInfo);
-  await publish(nwcInfoEvent, nwcRelays);
-  console.log("published nwc info", nwcInfoEvent, nwcRelays);
 
   const stats: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
