@@ -19,6 +19,7 @@ import {
 } from "./consts";
 import { WebSocket } from "ws";
 import { WSClient } from "./ws-client";
+import { EnclavedClient } from "./enclaved-client";
 
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
@@ -57,18 +58,10 @@ export async function publishNip65Relays(signer: Signer) {
 }
 
 export async function fetchCerts(pubkey: string) {
-  const url = process.env["ENCLAVED_ENDPOINT"];
-  if (!url) return undefined;
-
-  const client = new WSClient(url, {
-    token: process.env["ENCLAVED_TOKEN"] || "",
-  });
-
-  const r = await client.call<{ root: Event; certs: Event[] }>(
-    "create_certificate",
-    { pubkey }
-  );
+  const enclaved = new EnclavedClient();
+  const r = await enclaved.createCertificate(pubkey);
   console.log("certs", r);
+  enclaved.dispose();
   return r;
 }
 

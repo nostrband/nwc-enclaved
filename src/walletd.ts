@@ -9,10 +9,11 @@ import { MAX_TX_AGE } from "./modules/consts";
 import { WalletContext as GlobalContext } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
-import { fetchCerts, publishZapReceipt } from "./modules/nostr";
+import { publishZapReceipt } from "./modules/nostr";
 import { normalizeRelay, now } from "./modules/utils";
 import { startAnnouncing } from "./modules/announce";
 import { NWCServer } from "./modules/nwc-server";
+import { EnclavedClient } from "./modules/enclaved-client";
 
 // read from file or generate
 const servicePrivkey = getSecretKey();
@@ -82,10 +83,16 @@ export async function startWalletd({
 
   // get admin pubkey in enclaved mode
   let adminPubkey: string | undefined;
-  if (process.env['NWC_DEBUG'] !== 'true' && enclavedInternalWallet) {
-    adminPubkey = (await fetchCerts(servicePubkey))?.root.pubkey;
+  if (process.env["NWC_DEBUG"] !== "true" && enclavedInternalWallet) {
+    // get admin pubkey
+    const enclaved = new EnclavedClient();
+    adminPubkey = (await enclaved.createCertificate(servicePubkey))?.root
+      .pubkey;
     if (!adminPubkey) throw new Error("Failed to get enclaved admin pubkey");
     console.log("enclaved parent pubkey", adminPubkey);
+
+    // send our pubkey
+    await enclaved.setInfo({ pubkey: servicePubkey });
   }
 
   // load all wallets

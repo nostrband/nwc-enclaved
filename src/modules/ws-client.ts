@@ -20,6 +20,11 @@ export class WSClient {
     this.connect();
   }
 
+  public dispose() {
+    if (this.ws && this.ws.readyState !== WebSocket.CONNECTING) this.ws.close();
+    this.ws = undefined;
+  }
+
   private connect() {
     this.ws = new WebSocket(this.url, {
       headers: this.headers,
