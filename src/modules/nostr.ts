@@ -17,8 +17,6 @@ import {
   KIND_SERVICE_INFO,
   NWC_SUPPORTED_METHODS,
 } from "./consts";
-import { WebSocket } from "ws";
-import { WSClient } from "./ws-client";
 import { EnclavedClient } from "./enclaved-client";
 
 const DEFAULT_RELAYS = [
@@ -95,9 +93,6 @@ export async function publishServiceInfo(
   await publish(nwcInfoEvent, nwcRelays);
   console.log("published nwc info", nwcInfoEvent, nwcRelays);
 
-  // no other announcements for enclaved mode
-  if (enclavedInternalWallet) return;
-
   const certs = await fetchCerts(signer.getPublicKey());
   const serviceInfo: UnsignedEvent = {
     pubkey: signer.getPublicKey(),
@@ -152,14 +147,9 @@ export async function publishServiceInfo(
   );
 
   const npub = nip19.npubEncode(signer.getPublicKey());
-  const profile: UnsignedEvent = {
-    pubkey: signer.getPublicKey(),
-    kind: KIND_PROFILE,
-    created_at: now(),
-    content: JSON.stringify({
-      name: "nwc-enclaved wallet service",
-      lud16: `${npub}@${npub}.zap.land`,
-      about: `This is a safe custodial Lightning Wallet with NWC support.\n
+  const about = enclavedInternalWallet
+    ? `Internal wallet of enclaved server instance.`
+    : `This is a safe custodial Lightning Wallet with NWC support.\n
 It runs in a TEE (trusted execution environment) so it's private and funds can't be stolen.\n
 Learn more at https://github.com/nostrband/nwc-enclaved\n
 Max balance: ${info.maxBalance / 1000} sats.\n
@@ -178,7 +168,15 @@ ${
     : ""
 }
 ${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
-`,
+`;
+  const profile: UnsignedEvent = {
+    pubkey: signer.getPublicKey(),
+    kind: KIND_PROFILE,
+    created_at: now(),
+    content: JSON.stringify({
+      name: "nwc-enclaved wallet service",
+      lud16: `${npub}@${npub}.zap.land`,
+      about,
       picture: "",
     }),
     tags: [
@@ -190,6 +188,10 @@ ${dev ? `DEVELOPMENT INSTANCE, may break or get terminated at any time!` : ""}
   const profileEvent = await signer.signEvent(profile);
   await publish(profileEvent, OUTBOX_RELAYS);
   console.log("published profile", profileEvent, OUTBOX_RELAYS);
+
+  // let them all get published
+  // // no other announcements for enclaved mode
+  // if (enclavedInternalWallet) return;
 
   const stats: UnsignedEvent = {
     pubkey: signer.getPublicKey(),

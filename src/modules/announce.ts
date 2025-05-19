@@ -12,8 +12,7 @@ import { publishNip65Relays, publishServiceInfo } from "./nostr";
 
 // update our announcement once per minute
 async function announce(context: WalletContext) {
-  if (!context.enclavedInternalWallet)
-    await publishNip65Relays(context.serviceSigner);
+  await publishNip65Relays(context.serviceSigner);
 
   await publishServiceInfo(
     {
