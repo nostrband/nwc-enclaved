@@ -21,6 +21,6 @@ export class EnclavedClient extends WSClient {
   }
 
   public setInfo(info: { pubkey: string }) {
-    return this.call<{ ok: boolean }>("set_info", info);
+    return this.call<{ ok: boolean }>("set_info", { info });
   }
 }
