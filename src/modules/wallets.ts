@@ -159,15 +159,16 @@ export class Wallets {
     pubkey: string,
     zapRequest?: string
   ): Promise<NWCInvoice> {
+    const isService = pubkey === this.context.serviceSigner.getPublicKey();
+
     // only make invoices for allowed pubkeys
-    if (this.adminPubkey && !this.allowedPubkeys.has(pubkey))
+    if (!isService && this.adminPubkey && !this.allowedPubkeys.has(pubkey))
       throw new Error("Disallowed");
 
     // only rounded sats payments
     if (req.amount < 1000 || req.amount % 1000 > 0)
       throw new Error("Only sat payments are supported");
 
-    const isService = pubkey === this.context.serviceSigner.getPublicKey();
     // limit invoice size
     if (!isService) {
       if (req.amount > this.context.maxBalance)
