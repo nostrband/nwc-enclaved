@@ -89,6 +89,12 @@ export class NWCServerBase {
       case "get_balance":
         valid = true;
         break;
+      case "add_pubkey":
+        valid =
+          !!req.params.pubkey &&
+          typeof req.params.pubkey === "string" &&
+          req.params.pubkey.length === 64;
+        break;
       case "pay_invoice":
         valid = !!req.params.invoice && typeof req.params.invoice === "string";
         break;

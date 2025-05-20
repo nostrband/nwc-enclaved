@@ -56,10 +56,10 @@ export class Wallets {
     }
   }
 
-  public addPubkey(req: { clientPubkey: string; targetPubkey: string }) {
+  public addPubkey(req: { clientPubkey: string; pubkey: string }) {
     if (!this.adminPubkey) throw new Error("Not supported");
     if (this.adminPubkey !== req.clientPubkey) throw new Error("Disallowed");
-    this.allowedPubkeys.add(req.clientPubkey);
+    this.allowedPubkeys.add(req.pubkey);
   }
 
   // NOTE: must be sync to avoid races
