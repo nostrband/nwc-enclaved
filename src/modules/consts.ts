@@ -42,4 +42,5 @@ export const NWC_SUPPORTED_METHODS = [
   "list_transactions",
   "get_balance",
   "get_info",
+  "add_pubkey",
 ];
