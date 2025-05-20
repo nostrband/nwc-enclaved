@@ -133,7 +133,10 @@ export class Wallets {
   }
 
   public lookupInvoice(req: NWCLookupInvoiceReq): Promise<NWCTransaction> {
-    const tx = this.context.db.lookupInvoice(req);
+    const tx = this.context.db.lookupInvoice({
+      invoice: req.invoice,
+      paymentHash: req.payment_hash,
+    });
     if (!tx) throw new Error(NWC_NOT_FOUND);
     return Promise.resolve(tx);
   }
