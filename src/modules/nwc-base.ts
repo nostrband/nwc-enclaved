@@ -2,6 +2,7 @@ import { NWCReply, NWCRequest } from "./nwc-types";
 import { Event } from "nostr-tools";
 import { now } from "./utils";
 import {
+  KIND_NWC_NOTIFICATION,
   KIND_NWC_REPLY,
   KIND_NWC_REQUEST,
   NWC_SUPPORTED_METHODS,
@@ -216,7 +217,7 @@ export class NWCServerBase {
     };
     const event = await this.signer.signEvent({
       pubkey: this.signer.getPublicKey(),
-      kind: KIND_NWC_REPLY,
+      kind: KIND_NWC_NOTIFICATION,
       created_at: now(),
       tags: [["p", clientPubkey]],
       content: await this.signer.nip04Encrypt(
