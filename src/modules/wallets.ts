@@ -165,7 +165,12 @@ export class Wallets {
     const isService = pubkey === this.context.serviceSigner.getPublicKey();
 
     // only make invoices for allowed pubkeys
-    if (!isService && this.adminPubkey && !this.allowedPubkeys.has(pubkey))
+    if (
+      !isService &&
+      this.adminPubkey &&
+      this.adminPubkey !== pubkey &&
+      !this.allowedPubkeys.has(pubkey)
+    )
       throw new Error("Disallowed");
 
     // only rounded sats payments
