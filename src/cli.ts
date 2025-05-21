@@ -62,8 +62,11 @@ async function client(opts: {
   paramsJson: string;
 }) {
   const params = JSON.parse(paramsJson) || {};
-  const client = (privkey: Uint8Array) => {
-    const c = new NWCClient({ relayUrl, walletPubkey, privkey });
+  const client = (
+    privkey: Uint8Array,
+    onNotify?: (type: string, data: any) => void
+  ) => {
+    const c = new NWCClient({ relayUrl, walletPubkey, privkey, onNotify });
     c.start();
     return c;
   };
@@ -85,6 +88,12 @@ async function client(opts: {
       break;
     case "get_balance":
       r = await client(await getSecretKey()).getBalance();
+      break;
+    case "subscribe":
+      client(await getSecretKey(), (type: string, data: any) => {
+        console.log("type", type, "data", data);
+      });
+      await new Promise((ok) => {});
       break;
   }
 

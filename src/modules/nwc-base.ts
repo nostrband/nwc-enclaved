@@ -10,10 +10,12 @@ import { Signer } from "./abstract";
 
 export class NWCServerBase {
   private signer: Signer;
+  private onNotify: (event: Event) => Promise<void>;
   private done = new Set<string>();
 
-  constructor(signer: Signer) {
+  constructor(signer: Signer, onNotify: (event: Event) => Promise<void>) {
     this.signer = signer;
+    this.onNotify = onNotify;
   }
 
   public getSigner() {
@@ -201,5 +203,27 @@ export class NWCServerBase {
       ],
       content: await this.signer.nip04Encrypt(e.pubkey, JSON.stringify(res)),
     });
+  }
+
+  public async notify(
+    clientPubkey: string,
+    notification_type: string,
+    notification: any
+  ) {
+    const data = {
+      notification_type,
+      notification,
+    };
+    const event = await this.signer.signEvent({
+      pubkey: this.signer.getPublicKey(),
+      kind: KIND_NWC_REPLY,
+      created_at: now(),
+      tags: [["p", clientPubkey]],
+      content: await this.signer.nip04Encrypt(
+        clientPubkey,
+        JSON.stringify(data)
+      ),
+    });
+    this.onNotify(event);
   }
 }

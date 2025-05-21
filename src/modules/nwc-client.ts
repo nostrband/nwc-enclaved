@@ -4,7 +4,11 @@ import { Relay } from "./relay";
 import { Nip04 } from "./nip04";
 import { now } from "./utils";
 import { NWCInvoice, NWCPaymentResult, NWCTransaction } from "./nwc-types";
-import { KIND_NWC_REPLY, KIND_NWC_REQUEST } from "./consts";
+import {
+  KIND_NWC_NOTIFICATION,
+  KIND_NWC_REPLY,
+  KIND_NWC_REQUEST,
+} from "./consts";
 
 const nip04 = new Nip04();
 
@@ -59,6 +63,7 @@ interface NWCWallet {
 export class NWCClient implements NWCWallet {
   private relay: Relay;
   private walletPubkey?: string;
+  private onNotify?: (type: string, payload: any) => void;
 
   private privkey?: Uint8Array;
   private pending = new Map<
@@ -73,14 +78,17 @@ export class NWCClient implements NWCWallet {
     relayUrl,
     walletPubkey,
     privkey,
+    onNotify,
   }: {
     relayUrl: string;
     walletPubkey?: string;
     privkey?: Uint8Array;
+    onNotify?: (type: string, payload: any) => void;
   }) {
     this.relay = new Relay(relayUrl);
     this.walletPubkey = walletPubkey;
     this.privkey = privkey;
+    this.onNotify = onNotify;
   }
 
   public dispose() {
@@ -137,7 +145,6 @@ export class NWCClient implements NWCWallet {
   }
 
   private async onReplyEvent(e: Event) {
-    if (e.kind !== KIND_NWC_REPLY) return;
     const { result_type, error, result } = JSON.parse(
       await nip04.decrypt(this.privkey!, this.walletPubkey!, e.content)
     );
@@ -153,17 +160,28 @@ export class NWCClient implements NWCWallet {
     else cbs.ok(result);
   }
 
+  private async onNotifyEvent(e: Event) {
+    const { notification_type, notification } = JSON.parse(
+      await nip04.decrypt(this.privkey!, this.walletPubkey!, e.content)
+    );
+    console.log("notification", { notification_type, notification });
+    this.onNotify?.(notification_type, notification);
+  }
+
   private subscribe() {
     this.relay.req({
       fetch: false,
       id: bytesToHex(randomBytes(6)),
       filter: {
-        kinds: [KIND_NWC_REPLY],
+        kinds: [KIND_NWC_REPLY, KIND_NWC_NOTIFICATION],
         authors: [this.walletPubkey!],
         "#p": [getPublicKey(this.privkey!)],
         since: now() - 10,
       },
-      onEvent: this.onReplyEvent.bind(this),
+      onEvent: (e: Event) => {
+        if (e.kind === KIND_NWC_REPLY) this.onReplyEvent(e);
+        else if (e.kind === KIND_NWC_NOTIFICATION) this.onNotifyEvent(e);
+      },
     });
   }
 

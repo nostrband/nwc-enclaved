@@ -43,4 +43,5 @@ export const NWC_SUPPORTED_METHODS = [
   "get_balance",
   "get_info",
   "add_pubkey",
+  "notifications"
 ];

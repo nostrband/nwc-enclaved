@@ -516,7 +516,7 @@ export class DB implements IDB {
         created_at
       ) VALUES (1, ?, ?, ?, ?, ?, ?);
     `);
-    insert.run(
+    const r = insert.run(
       clientPubkey,
       invoice.payment_hash,
       invoice.description || "",
@@ -524,6 +524,7 @@ export class DB implements IDB {
       invoice.amount,
       now()
     );
+    return "" + r.lastInsertRowid;
   }
 
   public deletePayment(clientPubkey: string, paymentHash: string) {
@@ -641,6 +642,16 @@ export class DB implements IDB {
       settled_at: (r.settled_at as number) || 0,
       metadata: {},
     };
+  }
+
+  public getTransaction(id: string): NWCTransaction | undefined {
+    const select = this.db.prepare(`
+      SELECT * FROM records
+      WHERE id = ?
+    `);
+    const rec = select.get(id);
+    if (!rec) return undefined;
+    return this.recToTx(rec);
   }
 
   public listTransactions(req: NWCListTransactionsReq): {

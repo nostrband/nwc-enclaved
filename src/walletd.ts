@@ -9,7 +9,7 @@ import { MAX_TX_AGE } from "./modules/consts";
 import { WalletContext as GlobalContext } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
-import { publishZapReceipt } from "./modules/nostr";
+import { publish, publishZapReceipt } from "./modules/nostr";
 import { normalizeRelay, now } from "./modules/utils";
 import { startAnnouncing } from "./modules/announce";
 import { NWCServer } from "./modules/nwc-server";
@@ -106,6 +106,12 @@ export async function startWalletd({
         }
       );
     },
+    onPaymentReceived: (clientPubkey, tx) => {
+      server.notify(clientPubkey, "payment_received", tx);
+    },
+    onPaymentSent: (clientPubkey, tx) => {
+      server.notify(clientPubkey, "payment_sent", tx);
+    }
   });
 
   // start phoenix client and sync incoming payments
@@ -124,7 +130,13 @@ export async function startWalletd({
   });
 
   // NWC server
-  const server = new NWCServer(serviceSigner, wallets);
+  const server = new NWCServer({
+    signer: serviceSigner,
+    wallets,
+    onNotify: async (e: Event) => {
+      publish(e, relays);
+    },
+  });
 
   // request handler
   const handle = async (e: Event, relay: Relay) => {

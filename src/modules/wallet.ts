@@ -82,7 +82,7 @@ export class Wallet {
         throw new Error("Payment to non-service pubkey without liquidity");
 
       // we might have already made some first incoming payments without
-      // liquidity (those are in feeCredit), now that we've finally bought 
+      // liquidity (those are in feeCredit), now that we've finally bought
       // liquidity the current payment's miningFee is paid-feeCredit
       miningFee = this.context.fees.getMiningFeePaid() - newState.feeCredit;
 
@@ -252,7 +252,7 @@ export class Wallet {
   public async payInvoice(
     req: NWCPayInvoiceReq,
     payInternally?: (req: NWCPayInvoiceReq) => Promise<NWCPaymentResult>
-  ): Promise<NWCPaymentResult> {
+  ): Promise<NWCPaymentResult & { id: string }> {
     if (req.clientPubkey !== this.pubkey) throw new Error("Bad client pubkey");
 
     if (this.pendingPayments.size > MAX_CONCURRENT_PAYMENTS_PER_WALLET)
@@ -314,7 +314,7 @@ export class Wallet {
     this.pendingPayments.set(invoice.payment_hash, lockAmount);
 
     // create payment placeholder
-    this.context.db.createPayment(req.clientPubkey, invoice);
+    const id = this.context.db.createPayment(req.clientPubkey, invoice);
 
     try {
       // pay
@@ -380,6 +380,7 @@ export class Wallet {
 
       // result
       return {
+        id,
         preimage: r.preimage,
         fees_paid: totalFee,
       };

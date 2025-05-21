@@ -34,20 +34,24 @@ export type OnZapReceipt = (
   preimage: string
 ) => void;
 
+export type OnPayment = (clientPubkey: string, tx: NWCTransaction) => void;
+
+export interface WalletsOpts {
+  onZapReceipt: OnZapReceipt;
+  onPaymentSent: OnPayment;
+  onPaymentReceived: OnPayment;
+  adminPubkey?: string;
+}
+
 export class Wallets {
   private context: WalletContext;
   private wallets = new Map<string, Wallet>();
-  private onZapReceipt?: OnZapReceipt;
-  private adminPubkey?: string;
+  private opts: WalletsOpts;
   private allowedPubkeys = new Set<string>();
 
-  constructor(
-    context: WalletContext,
-    opts: { onZapReceipt: OnZapReceipt; adminPubkey?: string }
-  ) {
+  constructor(context: WalletContext, opts: WalletsOpts) {
     this.context = context;
-    this.onZapReceipt = opts.onZapReceipt;
-    this.adminPubkey = opts.adminPubkey;
+    this.opts = opts;
 
     const wallets = this.context.db.listWallets();
     for (const w of wallets) {
@@ -57,8 +61,9 @@ export class Wallets {
   }
 
   public addPubkey(req: { clientPubkey: string; pubkey: string }) {
-    if (!this.adminPubkey) throw new Error("Not supported");
-    if (this.adminPubkey !== req.clientPubkey) throw new Error("Disallowed");
+    if (!this.opts.adminPubkey) throw new Error("Not supported");
+    if (this.opts.adminPubkey !== req.clientPubkey)
+      throw new Error("Disallowed");
     this.allowedPubkeys.add(req.pubkey);
   }
 
@@ -87,8 +92,13 @@ export class Wallets {
     }
 
     const ok = w.settleInvoice(invoice, payment);
-    if (ok && zapRequest)
-      this.onZapReceipt!(zapRequest, invoice.invoice, payment.preimage);
+    if (ok) {
+      const tx = this.context.db.getTransaction(payment.externalId!);
+      if (tx) this.opts.onPaymentReceived(clientPubkey, tx);
+
+      if (zapRequest)
+        this.opts.onZapReceipt!(zapRequest, invoice.invoice, payment.preimage);
+    }
   }
 
   public async getInfo(clientPubkey: string): Promise<{
@@ -167,8 +177,8 @@ export class Wallets {
     // only make invoices for allowed pubkeys
     if (
       !isService &&
-      this.adminPubkey &&
-      this.adminPubkey !== pubkey &&
+      this.opts.adminPubkey &&
+      this.opts.adminPubkey !== pubkey &&
       !this.allowedPubkeys.has(pubkey)
     )
       throw new Error("Disallowed");
@@ -254,10 +264,7 @@ export class Wallets {
     }
   }
 
-  private async payInternal(
-    req: NWCPayInvoiceReq,
-    info: InvoiceInfo
-  ): Promise<NWCPaymentResult> {
+  private async payInternal(req: NWCPayInvoiceReq, info: InvoiceInfo) {
     if (req.clientPubkey === info.clientPubkey)
       throw new Error("Self-payment not supported");
 
@@ -290,7 +297,7 @@ export class Wallets {
     }
   }
 
-  public payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
+  public async payInvoice(req: NWCPayInvoiceReq): Promise<NWCPaymentResult> {
     if (req.clientPubkey === this.context.serviceSigner.getPublicKey())
       throw new Error("Service pubkey can't send payments");
     const w = this.wallets.get(req.clientPubkey);
@@ -303,13 +310,22 @@ export class Wallets {
     // no way to prevent that from happening. Leave it
     // for later.
     const info = this.context.db.getInvoiceInfo({ invoice: req.invoice });
-    if (this.context.enclavedInternalWallet && info) {
-      // internal payment
-      return this.payInternal(req, info);
-    } else {
-      // external payment
-      return w.payInvoice(req);
-    }
+    const internal = this.context.enclavedInternalWallet && info;
+
+    // pay
+    const r = internal
+      ? await this.payInternal(req, info)
+      : await w.payInvoice(req);
+
+    // notify
+    const tx = this.context.db.getTransaction(r.id);
+    if (tx) this.opts.onPaymentSent(req.clientPubkey, tx);
+
+    // return proper NWC result
+    return {
+      preimage: r.preimage,
+      fees_paid: r.fees_paid,
+    };
   }
 
   public chargeWalletFee(pubkey: string) {

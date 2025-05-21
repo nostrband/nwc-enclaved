@@ -135,7 +135,7 @@ export interface IDB {
     walletState: WalletState,
     miningFee: number
   ): boolean;
-  createPayment(clientPubkey: string, invoice: NWCInvoice): void;
+  createPayment(clientPubkey: string, invoice: NWCInvoice): string;
   deletePayment(clientPubkey: string, paymentHash: string): void;
   settlePayment(
     clientPubkey: string,
@@ -144,6 +144,7 @@ export interface IDB {
     feesPaid: number,
     walletState: WalletState
   ): void;
+  getTransaction(id: string): NWCTransaction | undefined;
   listTransactions(req: NWCListTransactionsReq): {
     total_count: number;
     transactions: NWCTransaction[];

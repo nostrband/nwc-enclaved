@@ -33,7 +33,7 @@ const OUTBOX_RELAYS = [
   "wss://relay.nos.social",
 ];
 
-async function publish(event: Event, relays: string[]) {
+export async function publish(event: Event, relays: string[]) {
   const promises = relays.map((r) => {
     const relay = new Relay(r);
     return relay.publish(event).finally(() => relay.dispose());
@@ -85,8 +85,8 @@ export async function publishServiceInfo(
     pubkey: signer.getPublicKey(),
     kind: KIND_NWC_INFO,
     created_at: now(),
-    content: NWC_SUPPORTED_METHODS.join(","),
-    tags: [],
+    content: NWC_SUPPORTED_METHODS.join(" "),
+    tags: [["notifications", "payment_received payment_sent"]],
   };
 
   const nwcInfoEvent = await signer.signEvent(nwcInfo);

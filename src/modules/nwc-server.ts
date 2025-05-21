@@ -1,3 +1,4 @@
+import { Event } from "nostr-tools";
 import { Signer } from "./abstract";
 import { isValidZapRequest } from "./nostr";
 import { NWCServerBase } from "./nwc-base";
@@ -8,9 +9,13 @@ import { Wallets } from "./wallets";
 export class NWCServer extends NWCServerBase {
   private wallets: Wallets;
 
-  constructor(signer: Signer, wallets: Wallets) {
-    super(signer);
-    this.wallets = wallets;
+  constructor(opts: {
+    signer: Signer;
+    wallets: Wallets;
+    onNotify: (event: Event) => Promise<void>;
+  }) {
+    super(opts.signer, opts.onNotify);
+    this.wallets = opts.wallets;
   }
 
   protected async addPubkey(req: NWCRequest, res: NWCReply): Promise<void> {
