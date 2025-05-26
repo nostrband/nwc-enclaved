@@ -36,6 +36,19 @@ async function startBackgroundJobs(context: GlobalContext, wallets: Wallets) {
   }
 }
 
+async function watchContainerInfo(enclaved: EnclavedClient) {
+  while (true) {
+    try {
+      const info = await enclaved.getContainerInfo();
+      console.log("container info", info);
+    } catch (e) {
+      console.log("Failed to get container info", e);
+    }
+
+    await new Promise(ok => setTimeout(ok, 1000));
+  }
+}
+
 export async function startWalletd({
   relayUrls,
   phoenixPassword,
@@ -93,6 +106,9 @@ export async function startWalletd({
 
     // send our pubkey
     await enclaved.setInfo({ pubkey: servicePubkey });
+
+    // start watching
+    watchContainerInfo(enclaved);
   }
 
   // load all wallets

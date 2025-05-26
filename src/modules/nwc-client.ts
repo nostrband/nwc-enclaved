@@ -149,8 +149,8 @@ export class NWCClient implements NWCWallet {
       await nip04.decrypt(this.privkey!, this.walletPubkey!, e.content)
     );
     const id = e.tags.find((t) => t.length > 1 && t[0] === "e")?.[1];
-    console.log("reply", { id, result_type, result, error });
     if (!id) return;
+    console.log("reply", { id, result_type, result, error });
 
     const cbs = this.pending.get(id);
     if (!cbs) return;

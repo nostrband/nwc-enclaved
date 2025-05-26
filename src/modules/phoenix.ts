@@ -151,6 +151,7 @@ export class Phoenix implements IBackend {
   }
 
   private async processIncomingPayment(p: IncomingPayment) {
+    console.log(new Date(), "phoenixd sync incoming payment", p);
     try {
       let firstLiquidityPayment = false;
       if (p.fees) {
@@ -367,7 +368,6 @@ export class Phoenix implements IBackend {
 
     // parse new payments in proper older-to-newer order
     for (const p of payments.reverse()) {
-      console.log(new Date(), "phoenixd sync incoming payment", p);
       await this.processIncomingPayment(p);
     }
   }

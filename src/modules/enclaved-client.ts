@@ -23,4 +23,17 @@ export class EnclavedClient extends WSClient {
   public setInfo(info: { pubkey: string }) {
     return this.call<{ ok: boolean }>("set_info", { info });
   }
+
+  public getContainerInfo() {
+    return this.call<{
+      pubkey: string;
+      balance: number;
+      uptimeCount: number;
+      uptimePaid: number;
+      units: number;
+      price: number;
+      interval: number;
+      walletPubkey: string;
+    }>("get_container_info", {});
+  }
 }
