@@ -49,7 +49,7 @@ async function watchContainerInfo(
   while (true) {
     try {
       const { container: info  } = await enclaved.getContainerInfo();
-      console.log(new Date(), "container info", info);
+      console.log(new Date(), "container info new", info);
 
       // need to pay?
       if (info.balance < info.price) {
