@@ -49,10 +49,11 @@ async function watchContainerInfo(
   while (true) {
     try {
       const info = await enclaved.getContainerInfo();
-      console.log("container info", info);
+      console.log(new Date(), "container info", info);
 
       // need to pay?
       if (info.balance < info.price) {
+        console.log("container balance low");
         const state = wallets.getWalletState(servicePubkey);
         console.log(new Date(), "need payment for container, service wallet state", state);
         if (state) {
