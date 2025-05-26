@@ -48,7 +48,7 @@ async function watchContainerInfo(
 ) {
   while (true) {
     try {
-      const info = await enclaved.getContainerInfo();
+      const { container: info  } = await enclaved.getContainerInfo();
       console.log(new Date(), "container info", info);
 
       // need to pay?
