@@ -1,19 +1,24 @@
-import { Event, getPublicKey } from "nostr-tools";
+import { Event, generateSecretKey, getPublicKey } from "nostr-tools";
 import { Relay } from "./modules/relay";
 import { RequestListener } from "./modules/listeners";
 import { PrivateKeySigner } from "./modules/signer";
 import { Wallets } from "./modules/wallets";
 import { DB } from "./modules/db";
 import { Phoenix } from "./modules/phoenix";
-import { MAX_TX_AGE } from "./modules/consts";
+import { KIND_SERVICE_INFO, MAX_TX_AGE } from "./modules/consts";
 import { WalletContext as GlobalContext } from "./modules/abstract";
 import { PhoenixFeePolicy } from "./modules/fees";
 import { getSecretKey } from "./modules/key";
-import { publish, publishZapReceipt } from "./modules/nostr";
+import {
+  fetchReplaceableEvent,
+  publish,
+  publishZapReceipt,
+} from "./modules/nostr";
 import { normalizeRelay, now } from "./modules/utils";
 import { startAnnouncing } from "./modules/announce";
 import { NWCServer } from "./modules/nwc-server";
 import { EnclavedClient } from "./modules/enclaved-client";
+import { NWCClient } from "./modules/nwc-client";
 
 // read from file or generate
 const servicePrivkey = getSecretKey();
@@ -36,11 +41,64 @@ async function startBackgroundJobs(context: GlobalContext, wallets: Wallets) {
   }
 }
 
-async function watchContainerInfo(enclaved: EnclavedClient) {
+async function watchContainerInfo(
+  enclaved: EnclavedClient,
+  wallets: Wallets,
+  fees: PhoenixFeePolicy
+) {
   while (true) {
     try {
       const info = await enclaved.getContainerInfo();
       console.log("container info", info);
+
+      // need to pay?
+      if (info.balance < info.price) {
+        const state = wallets.getWalletState(servicePubkey);
+        console.log(new Date(), "need payment for container, service wallet state", state);
+        if (state) {
+          const fee = fees.estimatePaymentFeeMsat(state, info.price, []);
+          console.log("container payment fee estimate", fee);
+          if (state.balance >= info.price + fee) {
+            const walletInfo = await fetchReplaceableEvent(
+              info.walletPubkey,
+              KIND_SERVICE_INFO
+            );
+            console.log(
+              new Date(),
+              "wallet info",
+              info.walletPubkey,
+              walletInfo
+            );
+            if (walletInfo) {
+              const relay = walletInfo.tags.find(
+                (t) => t.length > 1 && t[0] === "relay"
+              )?.[1];
+              if (relay) {
+                const client = new NWCClient({
+                  walletPubkey: info.walletPubkey,
+                  privkey: generateSecretKey(),
+                  relayUrl: relay,
+                });
+                try {
+                  client.start();
+                  const invoice = await client.makeInvoiceFor({
+                    amount: info.price,
+                    pubkey: info.pubkey,
+                  });
+                  console.log("container invoice", invoice);
+                  const payment = await wallets.payInvoice({
+                    clientPubkey: servicePubkey,
+                    invoice: invoice.invoice,
+                  });
+                  console.log("payment", payment);
+                } finally {
+                  client.dispose();
+                }
+              }
+            }
+          }
+        }
+      }
     } catch (e) {
       console.log("Failed to get container info", e);
     }
@@ -98,15 +156,7 @@ export async function startWalletd({
   const enclaved = process.env["ENCLAVED"] ? new EnclavedClient() : undefined;
 
   // set set our info
-  if (enclaved) {
-    await enclaved.setInfo({ pubkey: servicePubkey });
-
-    // are we a public wallet in enclaved? 
-    if (!enclavedInternalWallet) {
-      // start watching to be able to pay for ourselves
-      watchContainerInfo(enclaved);
-    }
-  }
+  if (enclaved) await enclaved.setInfo({ pubkey: servicePubkey });
 
   // get admin pubkey in enclaved internal wallet mode
   let adminPubkey: string | undefined;
@@ -155,6 +205,12 @@ export async function startWalletd({
       return !oldFees; // true if haven't paid fees before
     },
   });
+
+  // are we a public wallet in enclaved?
+  if (enclaved && !enclavedInternalWallet) {
+    // start watching to be able to pay for ourselves
+    watchContainerInfo(enclaved, wallets, fees);
+  }
 
   // NWC server
   const server = new NWCServer({

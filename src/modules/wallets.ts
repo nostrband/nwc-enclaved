@@ -3,6 +3,7 @@ import {
   MakeInvoiceBackendReq,
   OnIncomingPaymentEvent,
   WalletContext,
+  WalletState,
 } from "./abstract";
 import {
   MAX_ANON_INVOICES,
@@ -58,6 +59,11 @@ export class Wallets {
       this.wallets.set(w.pubkey, new Wallet(w.pubkey, this.context, w.state));
       console.log("wallet state", w.pubkey, JSON.stringify(w.state));
     }
+  }
+
+  public getWalletState(pubkey: string): WalletState | undefined {
+    const w = this.wallets.get(pubkey);
+    if (w) return { ...w.getState() };
   }
 
   public addPubkey(req: { clientPubkey: string; pubkey: string }) {

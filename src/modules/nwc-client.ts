@@ -65,7 +65,7 @@ export class NWCClient implements NWCWallet {
   private walletPubkey?: string;
   private onNotify?: (type: string, payload: any) => void;
 
-  private privkey?: Uint8Array;
+  private privkey: Uint8Array;
   private pending = new Map<
     string,
     {
@@ -82,7 +82,7 @@ export class NWCClient implements NWCWallet {
   }: {
     relayUrl: string;
     walletPubkey?: string;
-    privkey?: Uint8Array;
+    privkey: Uint8Array;
     onNotify?: (type: string, payload: any) => void;
   }) {
     this.relay = new Relay(relayUrl);
@@ -108,7 +108,7 @@ export class NWCClient implements NWCWallet {
     params: any;
     timeout?: number;
   }): Promise<Type> {
-    if (!this.privkey || !this.walletPubkey) throw new Error("Not started");
+    if (!this.walletPubkey) throw new Error("Not started");
 
     const req = {
       method,
@@ -146,7 +146,7 @@ export class NWCClient implements NWCWallet {
 
   private async onReplyEvent(e: Event) {
     const { result_type, error, result } = JSON.parse(
-      await nip04.decrypt(this.privkey!, this.walletPubkey!, e.content)
+      await nip04.decrypt(this.privkey, this.walletPubkey!, e.content)
     );
     const id = e.tags.find((t) => t.length > 1 && t[0] === "e")?.[1];
     if (!id) return;
@@ -162,7 +162,7 @@ export class NWCClient implements NWCWallet {
 
   private async onNotifyEvent(e: Event) {
     const { notification_type, notification } = JSON.parse(
-      await nip04.decrypt(this.privkey!, this.walletPubkey!, e.content)
+      await nip04.decrypt(this.privkey, this.walletPubkey!, e.content)
     );
     console.log("notification", { notification_type, notification });
     this.onNotify?.(notification_type, notification);
@@ -175,7 +175,7 @@ export class NWCClient implements NWCWallet {
       filter: {
         kinds: [KIND_NWC_REPLY, KIND_NWC_NOTIFICATION],
         authors: [this.walletPubkey!],
-        "#p": [getPublicKey(this.privkey!)],
+        "#p": [getPublicKey(this.privkey)],
         since: now() - 10,
       },
       onEvent: (e: Event) => {
