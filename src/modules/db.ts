@@ -718,6 +718,7 @@ export class DB implements IDB {
       walletsHour: 0,
       totalBalance: 0,
       totalFeeCredit: 0,
+      serviceBalance: 0,
     };
 
     const payments = this.db.prepare(
@@ -747,6 +748,11 @@ export class DB implements IDB {
       `SELECT SUM(fee_credit) as cnt FROM wallets WHERE pubkey != ?`
     );
     stats.totalFeeCredit = (fee.get(servicePubkey)?.cnt as number) || 0;
+
+    const serviceBalance = this.db.prepare(
+      `SELECT balance FROM wallets WHERE pubkey = ?`
+    );
+    stats.serviceBalance = (serviceBalance.get(servicePubkey)?.balance as number) || 0;
 
     return stats;
   }
