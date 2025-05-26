@@ -45,7 +45,7 @@ async function watchContainerInfo(enclaved: EnclavedClient) {
       console.log("Failed to get container info", e);
     }
 
-    await new Promise(ok => setTimeout(ok, 1000));
+    await new Promise((ok) => setTimeout(ok, 10000));
   }
 }
 
@@ -94,21 +94,32 @@ export async function startWalletd({
   fees.addMiningFeePaid(feeState.miningFeePaid);
   fees.addMiningFeeReceived(feeState.miningFeeReceived);
 
-  // get admin pubkey in enclaved mode
+  // enclaved?
+  const enclaved = process.env["ENCLAVED"] ? new EnclavedClient() : undefined;
+
+  // set set our info
+  if (enclaved) {
+    await enclaved.setInfo({ pubkey: servicePubkey });
+
+    // are we a public wallet in enclaved? 
+    if (!enclavedInternalWallet) {
+      // start watching to be able to pay for ourselves
+      watchContainerInfo(enclaved);
+    }
+  }
+
+  // get admin pubkey in enclaved internal wallet mode
   let adminPubkey: string | undefined;
-  if (process.env["NWC_DEBUG"] !== "true" && enclavedInternalWallet) {
+  if (
+    enclaved &&
+    process.env["NWC_DEBUG"] !== "true" &&
+    enclavedInternalWallet
+  ) {
     // get admin pubkey
-    const enclaved = new EnclavedClient();
     adminPubkey = (await enclaved.createCertificate(servicePubkey))?.root
       .pubkey;
     if (!adminPubkey) throw new Error("Failed to get enclaved admin pubkey");
     console.log("enclaved parent pubkey", adminPubkey);
-
-    // send our pubkey
-    await enclaved.setInfo({ pubkey: servicePubkey });
-
-    // start watching
-    watchContainerInfo(enclaved);
   }
 
   // load all wallets
@@ -127,7 +138,7 @@ export async function startWalletd({
     },
     onPaymentSent: (clientPubkey, tx) => {
       server.notify(clientPubkey, "payment_sent", tx);
-    }
+    },
   });
 
   // start phoenix client and sync incoming payments
