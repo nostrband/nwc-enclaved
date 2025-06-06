@@ -623,25 +623,28 @@ export class DB implements IDB {
   }
 
   private recToTx(r: Record<string, any>): NWCTransaction {
-    return {
+    const tx: NWCTransaction = {
       type: r.is_outgoing ? "outgoing" : "incoming",
       state: r.settled_at
         ? "settled"
         : r.expires_at < now()
         ? "failed"
         : "pending",
-      invoice: (r.invoice as string) || undefined,
-      description: (r.description as string) || undefined,
-      description_hash: (r.description_hash as string) || undefined,
-      preimage: (r.preimage as string) || undefined,
       payment_hash: r.payment_hash as string,
       amount: (r.amount as number) || 0,
       fees_paid: (r.fees_paid as number) || 0,
       created_at: (r.created_at as number) || 0,
-      expires_at: (r.expires_at as number) || 0,
-      settled_at: (r.settled_at as number) || 0,
       metadata: {},
     };
+
+    if (r.invoice) tx.invoice = r.invoice as string;
+    if (r.description) tx.description = r.description as string;
+    if (r.description_hash) tx.description_hash = r.description_hash as string;
+    if (r.preimage) tx.preimage = r.preimage as string;
+    if (r.expires_at) tx.expires_at = r.expires_at as number;
+    if (r.settled_at) tx.settled_at = r.settled_at as number;
+
+    return tx;
   }
 
   public getTransaction(id: string): NWCTransaction | undefined {
@@ -752,7 +755,8 @@ export class DB implements IDB {
     const serviceBalance = this.db.prepare(
       `SELECT balance FROM wallets WHERE pubkey = ?`
     );
-    stats.serviceBalance = (serviceBalance.get(servicePubkey)?.balance as number) || 0;
+    stats.serviceBalance =
+      (serviceBalance.get(servicePubkey)?.balance as number) || 0;
 
     return stats;
   }

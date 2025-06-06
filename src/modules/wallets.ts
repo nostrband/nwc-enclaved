@@ -11,6 +11,7 @@ import {
   MAX_INVOICES,
   MAX_INVOICE_EXPIRY,
   MAX_WALLETS,
+  NWC_SUPPORTED_METHODS,
   PHOENIX_AUTO_LIQUIDITY_AMOUNT,
 } from "./consts";
 import {
@@ -126,14 +127,8 @@ export class Wallets {
       block_height: info.blockHeight,
       // block_hash:
       //   "000000000000000000000000000000000000000000000000000000000000000000",
-      methods: [
-        "pay_invoice",
-        "get_balance",
-        "make_invoice",
-        "list_transactions",
-        "get_info",
-      ],
-      notifications: [], // "payment_received", "payment_sent"
+      methods: NWC_SUPPORTED_METHODS,
+      notifications: ["payment_received", "payment_sent"],
     };
   }
 

@@ -78,6 +78,7 @@ help Bitcoin and LN get adoption as a currency.
 - [x] abuse protection: fees for holding to protect against dormant small-balance wallets
 - [x] abuse protection: fees for payments to earn revenue on non-holding wallets
 - [x] privacy and security: open-source, reproducible, deployable in TEE
+- [ ] NIP44 encryption for NWC
 - [ ] custom relay with proper DDoS protections and settings
 - [ ] abuse protection: GC of emptied wallets
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
@@ -102,8 +103,8 @@ help Bitcoin and LN get adoption as a currency.
 ## Deployment in TEE
 
 This project is designed to be deployed inside [`enclaved`](https://github.com/nostrband/enclaved/) application
-server for AWS Nitro Enclaves. Basically, `nwc-enclaved` provides a reproducible Docker container and 
-uses `enclaved` server's internal API to get the attestation. 
+server for AWS Nitro Enclaves. Basically, `nwc-enclaved` provides a reproducible Docker container and
+uses `enclaved` server's internal API to get the attestation.
 
 ## LN Node
 
@@ -191,12 +192,11 @@ until there is at least one channel created on the backend.
 
 The simplest way to use the wallet is through a client library [`nwc-enclaved-utils`](https://github.com/nostrband/nwc-enclaved-utils) which helps
 you discover wallet services, create a wallet and get NWC string and LN address, and also can publish
-a Nostr profile with your LN address. 
+a Nostr profile with your LN address.
 
 ## TEE Attestation
 
-Attestation information is included in `kind:13196` tags as `tee_root` and `tee_cert` tags, verification
-can be done using [`nostr-enclaves`](https://github.com/nostrband/nostr-enclaves) library. The client
+Attestation information is included in `kind:13196` tags as `tee_root` ([NEC-01](https://github.com/nostrband/necs/blob/main/01.md)) and `tee_cert` tags, verification can be done using [`nostr-enclaves`](https://github.com/nostrband/nostr-enclaves) library. The client
 library mentioned above uses `nostr-enclaves` to validate attestation of discovered instances and only
 suggest valid ones.
 

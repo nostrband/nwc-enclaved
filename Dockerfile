@@ -83,3 +83,6 @@ VOLUME /home/phoenix/.phoenix/
 
 # Run the server
 ENTRYPOINT ["/app/run.sh"]
+
+# maintainer pubkeys
+LABEL signers="3356de61b39647931ce8b2140b2bab837e0810c0ef515bbe92de0248040b8bdd"

@@ -60,6 +60,7 @@ export class RequestListener {
       // for new requests, id will be the same to a previous
       // id of a batch so a new REQ will override the old REQ on relay
       const relay = this.relays.get(url) || new Relay(url);
+      this.relays.set(url, relay);
       this.req(relay, id, pubkeys);
     }
   }
