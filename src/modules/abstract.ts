@@ -186,4 +186,8 @@ export interface Signer {
   nip04Encrypt(pubkey: string, data: string): Promise<string>;
 
   nip04Decrypt(pubkey: string, data: string): Promise<string>;
+
+  nip44Encrypt(pubkey: string, data: string): Promise<string>;
+
+  nip44Decrypt(pubkey: string, data: string): Promise<string>;
 }

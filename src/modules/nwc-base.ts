@@ -142,6 +142,17 @@ export class NWCServerBase {
     return valid;
   }
 
+  private isNip04(ciphertext: string) {
+    const l = ciphertext.length;
+    if (l < 28) return false;
+    return (
+      ciphertext[l - 28] === "?" &&
+      ciphertext[l - 27] === "i" &&
+      ciphertext[l - 26] === "v" &&
+      ciphertext[l - 25] === "="
+    );
+  }
+
   // process event tagging pubkey
   public async process(e: Event): Promise<Event | undefined> {
     if (e.kind !== KIND_NWC_REQUEST) return; // ignore irrelevant kinds
@@ -164,8 +175,11 @@ export class NWCServerBase {
       result: null,
     };
 
+    const wasNip04 = this.isNip04(e.content);
     try {
-      const data = await this.signer.nip04Decrypt(e.pubkey, e.content);
+      const data = wasNip04
+        ? await this.signer.nip04Decrypt(e.pubkey, e.content)
+        : await this.signer.nip44Decrypt(e.pubkey, e.content);
       const { method, params } = JSON.parse(data);
       if (!method || !params) throw new Error("Bad request");
 
@@ -202,7 +216,9 @@ export class NWCServerBase {
         ["p", e.pubkey],
         ["e", e.id],
       ],
-      content: await this.signer.nip04Encrypt(e.pubkey, JSON.stringify(res)),
+      content: wasNip04
+        ? await this.signer.nip04Encrypt(e.pubkey, JSON.stringify(res))
+        : await this.signer.nip44Encrypt(e.pubkey, JSON.stringify(res)),
     });
   }
 

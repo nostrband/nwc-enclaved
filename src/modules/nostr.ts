@@ -56,11 +56,18 @@ export async function publishNip65Relays(signer: Signer) {
 }
 
 export async function fetchCerts(pubkey: string) {
-  const enclaved = new EnclavedClient();
-  const r = await enclaved.createCertificate(pubkey);
-  console.log("certs", r);
-  enclaved.dispose();
-  return r;
+  let enclaved: EnclavedClient | undefined;
+  try {
+    enclaved = new EnclavedClient();
+    const r = await enclaved.createCertificate(pubkey);
+    console.log("certs", r);
+    return r;
+  } catch (e) {
+    console.log("Failed to fetch certs", e);
+    return undefined;
+  } finally {
+    if (enclaved) enclaved.dispose();
+  }
 }
 
 export async function publishServiceInfo(
@@ -86,7 +93,10 @@ export async function publishServiceInfo(
     kind: KIND_NWC_INFO,
     created_at: now(),
     content: NWC_SUPPORTED_METHODS.join(" "),
-    tags: [["notifications", "payment_received payment_sent"]],
+    tags: [
+      ["encryption", "nip04 nip44_v2"],
+      ["notifications", "payment_received payment_sent"],
+    ],
   };
 
   const nwcInfoEvent = await signer.signEvent(nwcInfo);
