@@ -164,7 +164,8 @@ export async function startWalletd({
     await enclaved.setInfo({ pubkey: servicePubkey });
 
     // notify parent
-    await enclaved.log("starting nwc-enclaved in 'enclaved' mode")
+    if (enclavedInternalWallet)
+      await enclaved.log("starting nwc-enclaved in 'enclaved' mode")
   }
 
   // get admin pubkey in enclaved internal wallet mode

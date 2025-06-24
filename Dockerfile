@@ -91,4 +91,4 @@ LABEL signer_relays="wss://relay.enclaved.org,wss://relay.nostr.band/all"
 LABEL upgrade_relays="wss://relay.enclaved.org,wss://relay.nostr.band/all"
 # make sure to update this version, otherwise the enclaved server
 # will not be able to decide if this new image is an upgrade to a running container
-LABEL version="1.1.2"
+LABEL version="1.1.3"

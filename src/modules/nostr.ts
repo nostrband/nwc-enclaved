@@ -80,7 +80,8 @@ export async function publishServiceInfo(
     paymentFeeBase: number;
     walletFeeBase: number;
     walletFeePeriod: number;
-    open: boolean;
+    hasChannels: boolean;
+    internal: boolean;
     stats: any;
   },
   signer: Signer,
@@ -110,10 +111,14 @@ export async function publishServiceInfo(
     created_at: now(),
     content: "",
     tags: [
-      ["o", info.open ? "true" : "false"],
+      ["o", !info.internal && info.hasChannels ? "true" : "false"],
       [
         "comment",
-        info.open ? "Open for new wallets" : "Closed, no liquidity yet",
+        info.internal
+          ? "Internal enclaved wallet"
+          : info.hasChannels
+          ? "Open for new wallets"
+          : "No channels",
       ],
       ...nwcRelays.map((r) => ["relay", r]),
       ["minSendable", "" + info.minSendable],

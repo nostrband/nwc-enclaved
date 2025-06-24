@@ -116,17 +116,23 @@ export class Wallets {
     pubkey: string;
     network: string;
     block_height: number;
+    channels: number;
+    capacity: number;
     // block_hash: string;
     methods: string[];
     notifications: string[];
   }> {
     const info = await this.context.backend.getInfo();
+    const channels = info.channels.length;
+    const capacity = info.channels.reduce((a, c) => a + c.capacity, 0);
     return {
       alias: this.context.serviceSigner.getPublicKey(),
       color: "000000",
       pubkey: info.nodeId,
       network: info.chain,
       block_height: info.blockHeight,
+      channels,
+      capacity,
       // block_hash:
       //   "000000000000000000000000000000000000000000000000000000000000000000",
       methods: NWC_SUPPORTED_METHODS,
