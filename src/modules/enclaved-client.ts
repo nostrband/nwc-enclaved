@@ -39,4 +39,9 @@ export class EnclavedClient extends WSClient {
       };
     }>("get_container_info", {});
   }
+
+  public log(message: string) {
+    return this.call<void>("log", { message });
+  }
+
 }

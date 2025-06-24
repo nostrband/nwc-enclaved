@@ -156,8 +156,16 @@ export async function startWalletd({
   // enclaved?
   const enclaved = process.env["ENCLAVED"] ? new EnclavedClient() : undefined;
 
-  // set set our info
-  if (enclaved) await enclaved.setInfo({ pubkey: servicePubkey });
+  // got enclaved?
+  if (enclaved) {
+    context.enclaved = enclaved;
+
+    // set set our info
+    await enclaved.setInfo({ pubkey: servicePubkey });
+
+    // notify parent
+    await enclaved.log("starting nwc-enclaved in 'enclaved' mode")
+  }
 
   // get admin pubkey in enclaved internal wallet mode
   let adminPubkey: string | undefined;

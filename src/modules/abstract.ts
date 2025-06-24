@@ -6,6 +6,7 @@ import {
   NWCPaymentResult,
   NWCTransaction,
 } from "./nwc-types";
+import { EnclavedClient } from "./enclaved-client";
 
 export interface WalletState {
   balance: number;
@@ -168,6 +169,7 @@ export interface WalletContext {
   enclavedInternalWallet?: boolean;
   relays: string[];
   maxBalance: number;
+  enclaved?: EnclavedClient;
 }
 
 export type OnIncomingPayment = (p: OnIncomingPaymentEvent) => Promise<void>;

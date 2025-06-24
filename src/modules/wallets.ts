@@ -59,6 +59,8 @@ export class Wallets {
     for (const w of wallets) {
       this.wallets.set(w.pubkey, new Wallet(w.pubkey, this.context, w.state));
       console.log("wallet state", w.pubkey, JSON.stringify(w.state));
+      if (this.context.enclaved && w.pubkey === this.context.serviceSigner.getPublicKey())
+        this.context.enclaved.log("service wallet " + w.pubkey + " " + JSON.stringify(w.state)).catch(() => {});
     }
   }
 
