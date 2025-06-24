@@ -14,6 +14,7 @@ import { publishNip65Relays, publishServiceInfo } from "./nostr";
 async function announce(context: WalletContext) {
   await publishNip65Relays(context.serviceSigner);
 
+  const hasChannels = (await context.backend.getInfo()).channels.length > 0;
   await publishServiceInfo(
     {
       maxBalance: context.maxBalance,
@@ -24,7 +25,7 @@ async function announce(context: WalletContext) {
       paymentFeeBase: PHOENIX_PAYMENT_FEE_BASE + PAYMENT_FEE,
       walletFeeBase: WALLET_FEE,
       walletFeePeriod: WALLET_FEE_PERIOD,
-      open: (await context.backend.getInfo()).channels.length > 0,
+      open: !context.enclavedInternalWallet && hasChannels,
       stats: context.db.getStats(context.serviceSigner.getPublicKey()),
     },
     context.serviceSigner,
