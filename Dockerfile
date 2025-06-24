@@ -85,4 +85,10 @@ VOLUME /home/phoenix/.phoenix/
 ENTRYPOINT ["/app/run.sh"]
 
 # maintainer pubkeys
+LABEL repo="https://github.com/nostrband/nwc-enclaved"
 LABEL signers="3356de61b39647931ce8b2140b2bab837e0810c0ef515bbe92de0248040b8bdd"
+LABEL signer_relays="wss://relay.enclaved.org,wss://relay.nostr.band/all"
+LABEL upgrade_relays="wss://relay.enclaved.org,wss://relay.nostr.band/all"
+# make sure to update this version, otherwise the enclaved server
+# will not be able to decide if this new image is an upgrade to a running container
+LABEL version="1.1.0"

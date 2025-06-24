@@ -15,6 +15,16 @@ ls -la /
 chown -R phoenix:phoenix /home/phoenix
 ls -la /home/phoenix/.phoenix
 
+# Trap SIGTERM and SIGINT and forward to supervisord
+terminate() {
+  echo "Caught termination signal, forwarding to supervisord (PID: $SUPERVISOR_PID)"
+  kill -TERM "$SUPERVISOR_PID"
+  wait "$SUPERVISOR_PID"
+  exit 0
+}
+
+trap terminate TERM INT
+
 # Run supervisor first, no programs should be running yet
 cat supervisord.conf
 ./supervisord -c supervisord.conf &

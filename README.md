@@ -78,7 +78,7 @@ help Bitcoin and LN get adoption as a currency.
 - [x] abuse protection: fees for holding to protect against dormant small-balance wallets
 - [x] abuse protection: fees for payments to earn revenue on non-holding wallets
 - [x] privacy and security: open-source, reproducible, deployable in TEE
-- [ ] NIP44 encryption for NWC
+- [x] NIP44 encryption for NWC
 - [ ] custom relay with proper DDoS protections and settings
 - [ ] abuse protection: GC of emptied wallets
 - [ ] safe service termination: auto-withdrawal as cashu tokens over NIP-04 DM
@@ -140,8 +140,7 @@ the user is ready to accept LN payments and zaps.
 
 ## Service announcement event
 
-`nwc-enclaved` will publish a NIP-65 `kind:10002` event listing the relays it's using for NWC, and an announcement
-event of `kind:13196` to enable discovery and to inform clients about fees and other metadata:
+`nwc-enclaved` will publish an announcement event of `kind:13196` on popular relays to enable discovery and to inform clients about the NWC-relay used by the particular instance, their fees and other metadata:
 
 ```
 {
@@ -149,10 +148,11 @@ event of `kind:13196` to enable discovery and to inform clients about fees and o
   "kind": 13196,
   "pubkey": <wallet pubkey>,
   "tags": [
-      ["minSendable", 1000],
-      ["maxSendable", 100000000],
-      ["maxBalance", 100000000],
-      // TBD
+    ["relay", <nwc relay url>],
+    ["minSendable", 1000],
+    ["maxSendable", 100000000],
+    ["maxBalance", 100000000],
+    // TBD
   ]
 }
 ```
@@ -213,7 +213,3 @@ After the build is finished, compare the hashes to ones listed in `docker.json`.
 ## Important Notice
 
 THIS PROJECT IS UNDER ACTIVE DEVELOPMENT, USE AT YOUR OWN RISK.
-
-## TBD
-
-- add ["encryption", "nip44_v2"] and migrate to NIP-44
